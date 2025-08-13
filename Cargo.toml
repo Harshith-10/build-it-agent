@@ -1,0 +1,25 @@
+[package]
+name = "build-it-agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.47", features = ["rt", "rt-multi-thread", "macros"] }
+axum = "0.7"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Cross-platform process detection
+sysinfo = "0.30"
+
+# Platform-specific dependencies
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
