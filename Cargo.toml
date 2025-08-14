@@ -10,6 +10,7 @@ tokio = { version = "1.47", features = ["rt", "rt-multi-thread", "macros"] }
 axum = "0.7"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+crossbeam-channel = "0.5"
 
 # Cross-platform process detection
 sysinfo = "0.30"
