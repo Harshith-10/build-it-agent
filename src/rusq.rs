@@ -45,7 +45,7 @@ impl<T> Message<T> {
 
 /// Configuration for the MPMC queue
 #[derive(Debug, Clone)]
-pub struct QueueConfig {
+pub struct RusqConfig {
     /// Bounded channel capacity (None for unbounded)
     pub capacity: Option<usize>,
     /// Enable priority queuing
@@ -58,7 +58,7 @@ pub struct QueueConfig {
     pub enable_metrics: bool,
 }
 
-impl Default for QueueConfig {
+impl Default for RusqConfig {
     fn default() -> Self {
         Self {
             capacity: Some(10000),
@@ -72,7 +72,7 @@ impl Default for QueueConfig {
 
 /// Metrics for monitoring queue performance
 #[derive(Debug, Default)]
-pub struct QueueMetrics {
+pub struct RusqMetrics {
     pub messages_sent: AtomicU64,
     pub messages_received: AtomicU64,
     pub messages_failed: AtomicU64,
@@ -81,7 +81,7 @@ pub struct QueueMetrics {
     pub active_consumers: AtomicU64,
 }
 
-impl QueueMetrics {
+impl RusqMetrics {
     pub fn new() -> Self {
         Self::default()
     }
@@ -156,8 +156,8 @@ pub struct MpmcQueue<T> {
     dlq_sender: Sender<Message<T>>,
     dlq_receiver: Receiver<Message<T>>,
     
-    config: QueueConfig,
-    metrics: Arc<QueueMetrics>,
+    config: RusqConfig,
+    metrics: Arc<RusqMetrics>,
     is_shutdown: Arc<AtomicBool>,
 }
 
@@ -166,7 +166,7 @@ where
     T: Clone + Send + 'static,
 {
     /// Create a new MPMC queue with the given configuration
-    pub fn new(config: QueueConfig) -> Self {
+    pub fn new(config: RusqConfig) -> Self {
         let create_channel = |capacity: Option<usize>| {
             if let Some(cap) = capacity {
                 bounded(cap)
@@ -193,7 +193,7 @@ where
             dlq_sender,
             dlq_receiver,
             config,
-            metrics: Arc::new(QueueMetrics::new()),
+            metrics: Arc::new(RusqMetrics::new()),
             is_shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -263,8 +263,8 @@ pub struct Producer<T> {
     high_sender: Sender<Message<T>>,
     normal_sender: Sender<Message<T>>,
     low_sender: Sender<Message<T>>,
-    config: QueueConfig,
-    metrics: Arc<QueueMetrics>,
+    config: RusqConfig,
+    metrics: Arc<RusqMetrics>,
     is_shutdown: Arc<AtomicBool>,
 }
 
@@ -273,21 +273,21 @@ where
     T: Clone + Send,
 {
     /// Send a message with default priority
-    pub fn send(&self, payload: T, topic: String) -> Result<(), QueueError> {
+    pub fn send(&self, payload: T, topic: String) -> Result<(), RusqError> {
         let message = Message::new(payload, topic);
         self.send_message(message)
     }
 
     /// Send a message with specified priority
-    pub fn send_with_priority(&self, payload: T, topic: String, priority: Priority) -> Result<(), QueueError> {
+    pub fn send_with_priority(&self, payload: T, topic: String, priority: Priority) -> Result<(), RusqError> {
         let message = Message::new(payload, topic).with_priority(priority);
         self.send_message(message)
     }
 
     /// Send a pre-constructed message
-    pub fn send_message(&self, message: Message<T>) -> Result<(), QueueError> {
+    pub fn send_message(&self, message: Message<T>) -> Result<(), RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
-            return Err(QueueError::QueueShutdown);
+            return Err(RusqError::QueueShutdown);
         }
 
         let sender = match message.priority {
@@ -304,21 +304,21 @@ where
                 }
                 Ok(())
             }
-            Err(TrySendError::Full(_)) => Err(QueueError::QueueFull),
-            Err(TrySendError::Disconnected(_)) => Err(QueueError::QueueShutdown),
+            Err(TrySendError::Full(_)) => Err(RusqError::QueueFull),
+            Err(TrySendError::Disconnected(_)) => Err(RusqError::QueueShutdown),
         }
     }
 
     /// Send a message with blocking behavior
-    pub fn send_blocking(&self, payload: T, topic: String) -> Result<(), QueueError> {
+    pub fn send_blocking(&self, payload: T, topic: String) -> Result<(), RusqError> {
         let message = Message::new(payload, topic);
         self.send_message_blocking(message)
     }
 
     /// Send a pre-constructed message with blocking behavior
-    pub fn send_message_blocking(&self, message: Message<T>) -> Result<(), QueueError> {
+    pub fn send_message_blocking(&self, message: Message<T>) -> Result<(), RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
-            return Err(QueueError::QueueShutdown);
+            return Err(RusqError::QueueShutdown);
         }
 
         let sender = match message.priority {
@@ -335,7 +335,7 @@ where
                 }
                 Ok(())
             }
-            Err(_) => Err(QueueError::QueueShutdown),
+            Err(_) => Err(RusqError::QueueShutdown),
         }
     }
 }
@@ -353,8 +353,8 @@ pub struct Consumer<T> {
     normal_receiver: Receiver<Message<T>>,
     low_receiver: Receiver<Message<T>>,
     dlq_sender: Sender<Message<T>>,
-    config: QueueConfig,
-    metrics: Arc<QueueMetrics>,
+    config: RusqConfig,
+    metrics: Arc<RusqMetrics>,
     is_shutdown: Arc<AtomicBool>,
 }
 
@@ -363,9 +363,9 @@ where
     T: Clone + Send,
 {
     /// Receive a message with priority ordering (non-blocking)
-    pub fn try_recv(&self) -> Result<Message<T>, QueueError> {
+    pub fn try_recv(&self) -> Result<Message<T>, RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
-            return Err(QueueError::QueueShutdown);
+            return Err(RusqError::QueueShutdown);
         }
 
         // Check priority queues in order: Critical -> High -> Normal -> Low
@@ -376,7 +376,7 @@ where
                 }
                 return Ok(msg);
             }
-            Err(TryRecvError::Disconnected) => return Err(QueueError::QueueShutdown),
+            Err(TryRecvError::Disconnected) => return Err(RusqError::QueueShutdown),
             Err(TryRecvError::Empty) => {}
         }
 
@@ -387,7 +387,7 @@ where
                 }
                 return Ok(msg);
             }
-            Err(TryRecvError::Disconnected) => return Err(QueueError::QueueShutdown),
+            Err(TryRecvError::Disconnected) => return Err(RusqError::QueueShutdown),
             Err(TryRecvError::Empty) => {}
         }
 
@@ -398,7 +398,7 @@ where
                 }
                 return Ok(msg);
             }
-            Err(TryRecvError::Disconnected) => return Err(QueueError::QueueShutdown),
+            Err(TryRecvError::Disconnected) => return Err(RusqError::QueueShutdown),
             Err(TryRecvError::Empty) => {}
         }
 
@@ -409,26 +409,26 @@ where
                 }
                 Ok(msg)
             }
-            Err(TryRecvError::Disconnected) => Err(QueueError::QueueShutdown),
-            Err(TryRecvError::Empty) => Err(QueueError::Empty),
+            Err(TryRecvError::Disconnected) => Err(RusqError::QueueShutdown),
+            Err(TryRecvError::Empty) => Err(RusqError::Empty),
         }
     }
 
     /// Receive a message with priority ordering (blocking with timeout)
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<Message<T>, QueueError> {
+    pub fn recv_timeout(&self, timeout: Duration) -> Result<Message<T>, RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
-            return Err(QueueError::QueueShutdown);
+            return Err(RusqError::QueueShutdown);
         }
 
         let start_time = Instant::now();
 
         loop {
             if self.is_shutdown.load(Ordering::SeqCst) {
-                return Err(QueueError::QueueShutdown);
+                return Err(RusqError::QueueShutdown);
             }
 
             if start_time.elapsed() >= timeout {
-                return Err(QueueError::Timeout);
+                return Err(RusqError::Timeout);
             }
 
             // Use select! to efficiently wait on multiple receivers
@@ -441,7 +441,7 @@ where
                             }
                             return Ok(message);
                         }
-                        Err(_) => return Err(QueueError::QueueShutdown),
+                        Err(_) => return Err(RusqError::QueueShutdown),
                     }
                 }
                 recv(self.high_receiver) -> msg => {
@@ -452,7 +452,7 @@ where
                             }
                             return Ok(message);
                         }
-                        Err(_) => return Err(QueueError::QueueShutdown),
+                        Err(_) => return Err(RusqError::QueueShutdown),
                     }
                 }
                 recv(self.normal_receiver) -> msg => {
@@ -463,7 +463,7 @@ where
                             }
                             return Ok(message);
                         }
-                        Err(_) => return Err(QueueError::QueueShutdown),
+                        Err(_) => return Err(RusqError::QueueShutdown),
                     }
                 }
                 recv(self.low_receiver) -> msg => {
@@ -474,7 +474,7 @@ where
                             }
                             return Ok(message);
                         }
-                        Err(_) => return Err(QueueError::QueueShutdown),
+                        Err(_) => return Err(RusqError::QueueShutdown),
                     }
                 }
                 default(Duration::from_millis(10)) => {
@@ -485,12 +485,12 @@ where
     }
 
     /// Receive a message with priority ordering (blocking)
-    pub fn recv(&self) -> Result<Message<T>, QueueError> {
+    pub fn recv(&self) -> Result<Message<T>, RusqError> {
         self.recv_timeout(Duration::from_millis(self.config.consumer_timeout_ms))
     }
 
     /// Mark a message as failed and potentially send to DLQ
-    pub fn nack(&self, mut message: Message<T>) -> Result<(), QueueError> {
+    pub fn nack(&self, mut message: Message<T>) -> Result<(), RusqError> {
         message.retry_count += 1;
 
         if self.config.enable_metrics {
@@ -501,8 +501,8 @@ where
             // Send to dead letter queue
             match self.dlq_sender.try_send(message) {
                 Ok(_) => Ok(()),
-                Err(TrySendError::Full(_)) => Err(QueueError::QueueFull),
-                Err(TrySendError::Disconnected(_)) => Err(QueueError::QueueShutdown),
+                Err(TrySendError::Full(_)) => Err(RusqError::QueueFull),
+                Err(TrySendError::Disconnected(_)) => Err(RusqError::QueueShutdown),
             }
         } else {
             if self.config.enable_metrics {
@@ -519,7 +519,7 @@ where
 
             // This is a bit tricky - we need to get the sender from the receiver
             // In a real implementation, you might want to refactor this
-            Err(QueueError::RetryRequired)
+            Err(RusqError::RetryRequired)
         }
     }
 }
@@ -533,31 +533,31 @@ impl<T> Drop for Consumer<T> {
 /// Handle for accessing the dead letter queue
 pub struct DeadLetterQueue<T> {
     dlq_receiver: Receiver<Message<T>>,
-    metrics: Arc<QueueMetrics>,
+    metrics: Arc<RusqMetrics>,
 }
 
 impl<T> DeadLetterQueue<T> {
     /// Get a failed message from the dead letter queue
-    pub fn try_recv(&self) -> Result<Message<T>, QueueError> {
+    pub fn try_recv(&self) -> Result<Message<T>, RusqError> {
         match self.dlq_receiver.try_recv() {
             Ok(msg) => Ok(msg),
-            Err(TryRecvError::Empty) => Err(QueueError::Empty),
-            Err(TryRecvError::Disconnected) => Err(QueueError::QueueShutdown),
+            Err(TryRecvError::Empty) => Err(RusqError::Empty),
+            Err(TryRecvError::Disconnected) => Err(RusqError::QueueShutdown),
         }
     }
 
     /// Get a failed message from the dead letter queue with timeout
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<Message<T>, QueueError> {
+    pub fn recv_timeout(&self, timeout: Duration) -> Result<Message<T>, RusqError> {
         match self.dlq_receiver.recv_timeout(timeout) {
             Ok(msg) => Ok(msg),
-            Err(_) => Err(QueueError::Timeout),
+            Err(_) => Err(RusqError::Timeout),
         }
     }
 }
 
 /// Error types for the MPMC queue
 #[derive(Debug, Clone, PartialEq)]
-pub enum QueueError {
+pub enum RusqError {
     QueueFull,
     QueueShutdown,
     Empty,
@@ -565,19 +565,19 @@ pub enum QueueError {
     RetryRequired,
 }
 
-impl std::fmt::Display for QueueError {
+impl std::fmt::Display for RusqError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            QueueError::QueueFull => write!(f, "Queue is full"),
-            QueueError::QueueShutdown => write!(f, "Queue is shutdown"),
-            QueueError::Empty => write!(f, "Queue is empty"),
-            QueueError::Timeout => write!(f, "Operation timed out"),
-            QueueError::RetryRequired => write!(f, "Message retry required"),
+            RusqError::QueueFull => write!(f, "Queue is full"),
+            RusqError::QueueShutdown => write!(f, "Queue is shutdown"),
+            RusqError::Empty => write!(f, "Queue is empty"),
+            RusqError::Timeout => write!(f, "Operation timed out"),
+            RusqError::RetryRequired => write!(f, "Message retry required"),
         }
     }
 }
 
-impl std::error::Error for QueueError {}
+impl std::error::Error for RusqError {}
 
 // Utility functions
 fn generate_message_id() -> u64 {
@@ -601,7 +601,7 @@ mod tests {
 
     #[test]
     fn test_basic_send_receive() {
-        let config = QueueConfig::default();
+        let config = RusqConfig::default();
         let queue = MpmcQueue::new(config);
         
         let producer = queue.producer();
@@ -618,7 +618,7 @@ mod tests {
 
     #[test]
     fn test_priority_ordering() {
-        let config = QueueConfig::default();
+        let config = RusqConfig::default();
         let queue = MpmcQueue::new(config);
         
         let producer = queue.producer();
@@ -639,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_mpmc_concurrency() {
-        let config = QueueConfig::default();
+        let config = RusqConfig::default();
         let queue = Arc::new(MpmcQueue::new(config));
         
         let num_producers = 4;
@@ -673,7 +673,7 @@ mod tests {
                         Ok(_) => {
                             count_clone.fetch_add(1, Ordering::SeqCst);
                         }
-                        Err(QueueError::Empty) => {
+                        Err(RusqError::Empty) => {
                             thread::sleep(Duration::from_millis(1));
                         }
                         Err(_) => break,
@@ -702,7 +702,7 @@ mod tests {
 
     #[test]
     fn test_metrics() {
-        let config = QueueConfig::default();
+        let config = RusqConfig::default();
         let queue = MpmcQueue::new(config);
         
         let producer = queue.producer();
