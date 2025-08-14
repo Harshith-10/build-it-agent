@@ -19,42 +19,26 @@ pub struct LanguagePresence {
     pub path: Option<String>,
 }
 
-// NEW: Struct for platform-specific command configurations.
-#[derive(Debug, Deserialize, Clone)]
-struct PlatformConfig {
-    run_command: String,
-    #[allow(dead_code)]
-    run_args: Vec<String>,
-    compile_command: Option<String>,
-    #[allow(dead_code)]
-    compile_args: Vec<String>,
-}
-
-// NEW: Struct to hold configurations for different platforms from JSON.
-#[derive(Debug, Deserialize, Clone)]
-struct Platforms {
-    windows: PlatformConfig,
-    unix: PlatformConfig,
-}
-
-// MODIFIED: LanguageConfig to correctly parse the nested platform data from the JSON file.
+// Detailed config for each language from JSON
+// Unused fields are for future execution logic
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct LanguageConfig {
     display_name: String,
-    #[allow(dead_code)]
     file_name: String,
     version_commands: Vec<String>,
-    platforms: Platforms, // This now correctly maps to the "platforms" object in the JSON.
-    #[allow(dead_code)]
+    compile_command: Option<String>,
+    compile_args: Vec<String>,
     optimization_args: Vec<String>,
+    run_command: String,
+    run_args: Vec<String>,
 }
 
 fn find_executable(exe: &str) -> std::io::Result<PathBuf> {
     which(exe).map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))
 }
 
-/// Detect languages based on commands listed in a JSON config file, in parallel using Tokio.
+/// Detect languages based on commands listed in a JSON config file, in parallel using Tokio
 #[allow(dead_code)]
 pub async fn detect_languages(config_path: &str) -> Vec<LanguagePresence> {
     // Load and parse the JSON configuration
@@ -66,10 +50,10 @@ pub async fn detect_languages(config_path: &str) -> Vec<LanguagePresence> {
     if file.read_to_string(&mut content).is_err() {
         return Vec::new();
     }
-    // Deserialize JSON to the new, corrected LanguageConfig entries.
+    // Deserialize JSON to detailed LanguageConfig entries
     let mapping: HashMap<String, LanguageConfig> = match serde_json::from_str(&content) {
         Ok(m) => m,
-        Err(_) => return Vec::new(), // This was being triggered due to the struct mismatch.
+        Err(_) => return Vec::new(),
     };
 
     let mut tasks = Vec::new();
@@ -77,20 +61,12 @@ pub async fn detect_languages(config_path: &str) -> Vec<LanguagePresence> {
         let codename_clone = codename.clone();
         let cfg_clone = cfg.clone();
         tasks.push(task::spawn_blocking(move || {
-            // MODIFIED: Select the correct platform configuration based on the target OS.
-            let platform_cfg = if cfg!(target_os = "windows") {
-                cfg_clone.platforms.windows
-            } else {
-                cfg_clone.platforms.unix
-            };
-
             let name_static: &'static str = Box::leak(codename_clone.into_boxed_str());
             let mut found = false;
             let mut version = None;
             let mut path = None;
-
-            // MODIFIED: Determine the primary executable from the platform-specific config.
-            if let Some(primary) = platform_cfg.compile_command.as_ref().or(Some(&platform_cfg.run_command)) {
+            // Determine primary executable: compile or run
+            if let Some(primary) = cfg_clone.compile_command.as_ref().or(Some(&cfg_clone.run_command)) {
                 if let Ok(exec_path) = find_executable(primary) {
                     found = true;
                     path = Some(exec_path.to_string_lossy().to_string());
