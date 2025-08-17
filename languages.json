@@ -258,5 +258,25 @@
             }
         },
         "optimization_args": []
+    },
+    "mysql": {
+        "display_name": "MySQL",
+        "file_name": "script.sql",
+        "version_commands": ["mysql --version"],
+        "platforms": {
+            "windows": {
+                "run_command": "mysql",
+                "run_args": ["-u", "root", "-p"],
+                "compile_command": null,
+                "compile_args": []
+            },
+            "unix": {
+                "run_command": "mysql",
+                "run_args": ["-u", "root", "-p"],
+                "compile_command": null,
+                "compile_args": []
+            }
+        },
+        "optimization_args": []
     }
 }

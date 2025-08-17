@@ -20,18 +20,24 @@ pub struct LanguagePresence {
 }
 
 // Detailed config for each language from JSON
-// Unused fields are for future execution logic
+// Platform-specific configuration
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Clone)]
+struct PlatformConfig {
+    compile_command: Option<String>,
+    compile_args: Vec<String>,
+    run_command: String,
+    run_args: Vec<String>,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct LanguageConfig {
     display_name: String,
     file_name: String,
     version_commands: Vec<String>,
-    compile_command: Option<String>,
-    compile_args: Vec<String>,
+    platforms: std::collections::HashMap<String, PlatformConfig>,
     optimization_args: Vec<String>,
-    run_command: String,
-    run_args: Vec<String>,
 }
 
 fn find_executable(exe: &str) -> std::io::Result<PathBuf> {
@@ -65,21 +71,28 @@ pub async fn detect_languages(config_path: &str) -> Vec<LanguagePresence> {
             let mut found = false;
             let mut version = None;
             let mut path = None;
-            // Determine primary executable: compile or run
-            if let Some(primary) = cfg_clone.compile_command.as_ref().or(Some(&cfg_clone.run_command)) {
-                if let Ok(exec_path) = find_executable(primary) {
-                    found = true;
-                    path = Some(exec_path.to_string_lossy().to_string());
-                    // Retrieve version via version_commands
-                    for cmd in &cfg_clone.version_commands {
-                        let mut parts = cmd.split_whitespace();
-                        if let Some(exe) = parts.next() {
-                            let args: Vec<&str> = parts.collect();
-                            if let Ok(ver_path) = find_executable(exe) {
-                                if let Ok(output) = Command::new(&ver_path).args(&args).output() {
-                                    let out_bytes = if !output.stdout.is_empty() { output.stdout } else { output.stderr };
-                                    version = Some(String::from_utf8_lossy(&out_bytes).trim().to_string());
-                                    break;
+            
+            // Determine current platform
+            let platform = if cfg!(windows) { "windows" } else { "unix" };
+            
+            // Get platform-specific configuration
+            if let Some(platform_cfg) = cfg_clone.platforms.get(platform) {
+                // Determine primary executable: compile or run
+                if let Some(primary) = platform_cfg.compile_command.as_ref().or(Some(&platform_cfg.run_command)) {
+                    if let Ok(exec_path) = find_executable(primary) {
+                        found = true;
+                        path = Some(exec_path.to_string_lossy().to_string());
+                        // Retrieve version via version_commands
+                        for cmd in &cfg_clone.version_commands {
+                            let mut parts = cmd.split_whitespace();
+                            if let Some(exe) = parts.next() {
+                                let args: Vec<&str> = parts.collect();
+                                if let Ok(ver_path) = find_executable(exe) {
+                                    if let Ok(output) = Command::new(&ver_path).args(&args).output() {
+                                        let out_bytes = if !output.stdout.is_empty() { output.stdout } else { output.stderr };
+                                        version = Some(String::from_utf8_lossy(&out_bytes).trim().to_string());
+                                        break;
+                                    }
                                 }
                             }
                         }
