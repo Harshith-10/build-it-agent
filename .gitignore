@@ -1,1 +1,4 @@
+# ignore rust module files
 /target
+# ignore compiling test file
+/test
