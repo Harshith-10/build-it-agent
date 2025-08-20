@@ -21,14 +21,14 @@ echo "Python3 detected in /languages"
 
 CODE=$(cat <<'PY'
 x = int(input())
-y = int(input())
+y = int(input()
 print(x + y)
 PY
 )
 
 # Test input with newline
-input=$'1\n2\n'
-expected_output=$'3\n'
+input=$'10\n20\n'
+expected_output=$'30\n'
 
 payload=$(jq -n --arg lang python3 --arg code "$CODE" --arg input "$input" --arg expected "$expected_output" '{
   language: $lang,

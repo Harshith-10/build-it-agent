@@ -99,7 +99,11 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.c".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["main.c".to_string(), "-o".to_string(), "main.exe".to_string()]
+            vec![
+                "main.c".to_string(),
+                "-o".to_string(),
+                "main.exe".to_string(),
+            ]
         } else {
             vec!["main.c".to_string(), "-o".to_string(), "main".to_string()]
         };
@@ -124,7 +128,11 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.c".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["main.c".to_string(), "-o".to_string(), "main.exe".to_string()]
+            vec![
+                "main.c".to_string(),
+                "-o".to_string(),
+                "main.exe".to_string(),
+            ]
         } else {
             vec!["main.c".to_string(), "-o".to_string(), "main".to_string()]
         };
@@ -149,7 +157,11 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.cpp".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["main.cpp".to_string(), "-o".to_string(), "main.exe".to_string()]
+            vec![
+                "main.cpp".to_string(),
+                "-o".to_string(),
+                "main.exe".to_string(),
+            ]
         } else {
             vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()]
         };
@@ -174,7 +186,11 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.cpp".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["main.cpp".to_string(), "-o".to_string(), "main.exe".to_string()]
+            vec![
+                "main.cpp".to_string(),
+                "-o".to_string(),
+                "main.exe".to_string(),
+            ]
         } else {
             vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()]
         };
@@ -199,7 +215,11 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.rs".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["main.rs".to_string(), "-o".to_string(), "main.exe".to_string()]
+            vec![
+                "main.rs".to_string(),
+                "-o".to_string(),
+                "main.exe".to_string(),
+            ]
         } else {
             vec!["main.rs".to_string(), "-o".to_string(), "main".to_string()]
         };
@@ -243,9 +263,19 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.go".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["build".to_string(), "-o".to_string(), "main.exe".to_string(), "main.go".to_string()]
+            vec![
+                "build".to_string(),
+                "-o".to_string(),
+                "main.exe".to_string(),
+                "main.go".to_string(),
+            ]
         } else {
-            vec!["build".to_string(), "-o".to_string(), "main".to_string(), "main.go".to_string()]
+            vec![
+                "build".to_string(),
+                "-o".to_string(),
+                "main".to_string(),
+                "main.go".to_string(),
+            ]
         };
         let run_command = if is_windows { "main.exe" } else { "./main" };
         configs.insert(
@@ -312,7 +342,12 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
                 file_name: file_name.clone(),
                 version_command: "kotlinc -version".to_string(),
                 compile_command: Some("kotlinc".to_string()),
-                compile_args: vec!["Main.kt".to_string(), "-include-runtime".to_string(), "-d".to_string(), "Main.jar".to_string()],
+                compile_args: vec![
+                    "Main.kt".to_string(),
+                    "-include-runtime".to_string(),
+                    "-d".to_string(),
+                    "Main.jar".to_string(),
+                ],
                 run_command: "java".to_string(),
                 run_args: vec!["-jar".to_string(), "Main.jar".to_string()],
                 file_extension: ext,

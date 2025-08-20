@@ -10,7 +10,10 @@ use axum::{
 };
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::sync::{atomic::{AtomicU64, Ordering}, Arc};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use std::time::Instant;
 use tempfile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -182,7 +185,9 @@ async fn status_handler(State(state): State<AppState>, Path(id): Path<u64>) -> i
         let body = match st {
             JobState::Queued => JobStatusResponse::Queued,
             JobState::Running => JobStatusResponse::Running,
-            JobState::Completed(res) => JobStatusResponse::Completed { result: res.clone() },
+            JobState::Completed(res) => JobStatusResponse::Completed {
+                result: res.clone(),
+            },
             JobState::Error(err) => JobStatusResponse::Error { error: err.clone() },
         };
         (StatusCode::OK, Json(body)).into_response()
@@ -291,6 +296,8 @@ async fn execute_request(req: &ExecuteRequest, state: &AppState) -> Result<Execu
             id: tc.id,
             ok,
             passed,
+            input: tc.input.clone(),
+            expected: tc.expected.clone(),
             stdout,
             stderr,
             timed_out,
@@ -304,7 +311,7 @@ async fn execute_request(req: &ExecuteRequest, state: &AppState) -> Result<Execu
     Ok(ExecuteResponse {
         compiled,
         language: req.language.clone(),
-    status: Some(ExecutionStatus::Success),
+        status: Some(ExecutionStatus::Success),
         results,
         total_duration_ms,
     })

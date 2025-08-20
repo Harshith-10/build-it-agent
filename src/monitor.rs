@@ -98,7 +98,7 @@ pub fn get_default_forbidden_list() -> Vec<String> {
     // Windows-specific
     if cfg!(windows) {
         forbidden.extend([
-            "copilot.exe".to_string(),                    // Copilot
+            "copilot.exe".to_string(), // Copilot
             "Copilot".to_string(),
             "mstsc.exe".to_string(),                      // Remote Desktop
             "TeamViewer.exe".to_string(),                 // TeamViewer
@@ -111,7 +111,7 @@ pub fn get_default_forbidden_list() -> Vec<String> {
             "supremo.exe".to_string(),                    // SupRemo
             "ultraviewer.exe".to_string(),                // UltraViewer
             "wsl.exe".to_string(),
-            "Windows Subsystem for Linux".to_string(),    // WSL
+            "Windows Subsystem for Linux".to_string(), // WSL
         ]);
     }
 
@@ -282,7 +282,10 @@ pub async fn run() -> Result<()> {
 
     let forbidden_list = Arc::new(get_default_forbidden_list());
 
-    println!("Checking for {} known forbidden processes", forbidden_list.len());
+    println!(
+        "Checking for {} known forbidden processes",
+        forbidden_list.len()
+    );
     println!(
         "Platform: {}",
         if cfg!(windows) {

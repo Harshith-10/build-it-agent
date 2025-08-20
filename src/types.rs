@@ -21,6 +21,9 @@ pub struct CaseResult {
     pub id: i32,
     pub ok: bool,
     pub passed: bool,
+    pub input: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
     pub stdout: String,
     pub stderr: String,
     pub timed_out: bool,
@@ -33,6 +36,7 @@ pub struct CaseResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ExecutionStatus {
     Success,
     Error,
