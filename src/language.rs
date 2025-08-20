@@ -199,9 +199,9 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         let file_name = "main.rs".to_string();
         let ext = ext_of(&file_name);
         let compile_args = if is_windows {
-            vec!["main.rs".to_string(), "-o".to_string(), "main.exe".to_string(), "--release".to_string()]
+            vec!["main.rs".to_string(), "-o".to_string(), "main.exe".to_string()]
         } else {
-            vec!["main.rs".to_string(), "-o".to_string(), "main".to_string(), "--release".to_string()]
+            vec!["main.rs".to_string(), "-o".to_string(), "main".to_string()]
         };
         let run_command = if is_windows { "main.exe" } else { "./main" };
         configs.insert(
@@ -226,7 +226,7 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         configs.insert(
             "node".to_string(),
             LanguageConfig {
-                display_name: "Node.js".to_string(),
+                display_name: "JavaScript".to_string(),
                 file_name: file_name.clone(),
                 version_command: "node --version".to_string(),
                 compile_command: None,
