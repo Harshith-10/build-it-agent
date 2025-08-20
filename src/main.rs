@@ -1,7 +1,12 @@
 use anyhow::Result;
-mod language_detector;
+mod language;
+mod monitor;
 
-use language_detector::detect_languages;
+use language::{
+    LanguageInfo,
+    get_installed_languages,
+    load_language_configs
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,14 +20,15 @@ async fn main() -> Result<()> {
         eprintln!("Config file not found: {}", config_path);
         return Ok(());
     }
-    let languages = detect_languages(&config_path)
+    let configs = load_language_configs(config_path).unwrap();
+    let languages = get_installed_languages(&configs)
         .await
         .into_iter()
-        .map(|lang| lang.display_name)
+        .map(|lang: LanguageInfo| lang.display_name)
         .collect::<Vec<String>>();
 
     println!("Detected languages: {:?}", languages);
 
-    // monitor::run().await?;
+    monitor::run().await?;
     Ok(())
 }
