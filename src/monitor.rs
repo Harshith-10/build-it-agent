@@ -63,14 +63,6 @@ pub fn get_default_forbidden_list() -> Vec<String> {
         "PowerToys".to_string(), // PowerToys
         "ollama".to_string(),
         "Ollama".to_string(), // Ollama
-        "github desktop".to_string(),
-        "GitHub Desktop".to_string(), // GitHub Desktop
-        "sourcetree".to_string(),
-        "SourceTree".to_string(), // SourceTree
-        "postman".to_string(),
-        "Postman".to_string(), // Postman
-        "insomnia".to_string(),
-        "Insomnia".to_string(), // Insomnia
         "docker".to_string(),
         "Docker Desktop".to_string(), // Docker
         "virtualbox".to_string(),
@@ -106,6 +98,7 @@ pub fn get_default_forbidden_list() -> Vec<String> {
     // Windows-specific
     if cfg!(windows) {
         forbidden.extend([
+            "copilot.exe".to_string(),                    // Copilot
             "Copilot".to_string(),
             "mstsc.exe".to_string(),                      // Remote Desktop
             "TeamViewer.exe".to_string(),                 // TeamViewer
@@ -117,6 +110,8 @@ pub fn get_default_forbidden_list() -> Vec<String> {
             "dwservice.exe".to_string(),                  // DWService
             "supremo.exe".to_string(),                    // SupRemo
             "ultraviewer.exe".to_string(),                // UltraViewer
+            "wsl.exe".to_string(),
+            "Windows Subsystem for Linux".to_string(),    // WSL
         ]);
     }
 
@@ -287,7 +282,7 @@ pub async fn run() -> Result<()> {
 
     let forbidden_list = Arc::new(get_default_forbidden_list());
 
-    println!("Monitoring {} forbidden processes", forbidden_list.len());
+    println!("Checking for {} known forbidden processes", forbidden_list.len());
     println!(
         "Platform: {}",
         if cfg!(windows) {

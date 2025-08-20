@@ -1,7 +1,4 @@
-use anyhow::{anyhow, Result};
-use serde_json::Value;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 // Configuration used at runtime for each language
@@ -26,83 +23,304 @@ pub struct LanguageInfo {
 }
 
 // Load language configurations from JSON and select platform-specific settings
-pub fn load_language_configs(config_path: &str) -> Result<HashMap<String, LanguageConfig>> {
-    let data = fs::read_to_string(config_path)?;
-    let v: Value = serde_json::from_str(&data)?;
-    let obj = v
-        .as_object()
-        .ok_or_else(|| anyhow!("Invalid JSON structure"))?;
-    let mut configs = HashMap::new();
-    let os_key = if cfg!(windows) { "windows" } else { "unix" };
-    for (name, entry) in obj {
-        let entry_obj = if let Some(map) = entry.as_object() {
-            map
-        } else {
-            continue;
-        };
-        let display_name = entry_obj
-            .get("display_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let file_name = entry_obj
-            .get("file_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let ext = Path::new(&file_name)
+pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
+    // Hardcoded language configurations (previously in `languages.json`).
+    // Platform-specific differences are selected at runtime using cfg!(windows).
+    let is_windows = cfg!(windows);
+    let mut configs: HashMap<String, LanguageConfig> = HashMap::new();
+
+    let ext_of = |fname: &str| -> String {
+        Path::new(fname)
             .extension()
             .and_then(|s| s.to_str())
             .unwrap_or("")
-            .to_string();
-        if let Some(platforms) = entry_obj.get("platforms").and_then(|v| v.as_object()) {
-            if let Some(platform) = platforms.get(os_key).and_then(|v| v.as_object()) {
-                if let Some(run_cmd) = platform.get("run_command").and_then(|v| v.as_str()) {
-                    let run_args = platform
-                        .get("run_args")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|x| x.as_str().map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    let compile_command = platform
-                        .get("compile_command")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let compile_args = platform
-                        .get("compile_args")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|x| x.as_str().map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    let version_command = entry_obj
-                        .get("version_command")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    configs.insert(
-                        name.clone(),
-                        LanguageConfig {
-                            display_name: display_name.clone(),
-                            file_name: file_name.clone(),
-                            version_command,
-                            compile_command,
-                            compile_args,
-                            run_command: run_cmd.to_string(),
-                            run_args,
-                            file_extension: ext,
-                        },
-                    );
-                }
-            }
-        }
+            .to_string()
+    };
+
+    // python3
+    {
+        let file_name = "main.py".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "python3".to_string(),
+            LanguageConfig {
+                display_name: "Python 3".to_string(),
+                file_name: file_name.clone(),
+                version_command: "python3 --version".to_string(),
+                compile_command: None,
+                compile_args: vec![],
+                run_command: if is_windows { "python" } else { "python3" }.to_string(),
+                run_args: vec!["main.py".to_string()],
+                file_extension: ext,
+            },
+        );
     }
-    Ok(configs)
+
+    // python
+    {
+        let file_name = "main.py".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "python".to_string(),
+            LanguageConfig {
+                display_name: "Python".to_string(),
+                file_name: file_name.clone(),
+                version_command: "python --version".to_string(),
+                compile_command: None,
+                compile_args: vec![],
+                run_command: "python".to_string(),
+                run_args: vec!["main.py".to_string()],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // java
+    {
+        let file_name = "Main.java".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "java".to_string(),
+            LanguageConfig {
+                display_name: "Java".to_string(),
+                file_name: file_name.clone(),
+                version_command: "java -version".to_string(),
+                compile_command: Some("javac".to_string()),
+                compile_args: vec!["Main.java".to_string()],
+                run_command: "java".to_string(),
+                run_args: vec!["Main".to_string()],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // gcc
+    {
+        let file_name = "main.c".to_string();
+        let ext = ext_of(&file_name);
+        let compile_args = if is_windows {
+            vec!["main.c".to_string(), "-o".to_string(), "main.exe".to_string()]
+        } else {
+            vec!["main.c".to_string(), "-o".to_string(), "main".to_string()]
+        };
+        let run_command = if is_windows { "main.exe" } else { "./main" };
+        configs.insert(
+            "gcc".to_string(),
+            LanguageConfig {
+                display_name: "GNU C".to_string(),
+                file_name: file_name.clone(),
+                version_command: "gcc --version".to_string(),
+                compile_command: Some("gcc".to_string()),
+                compile_args,
+                run_command: run_command.to_string(),
+                run_args: vec![],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // clang
+    {
+        let file_name = "main.c".to_string();
+        let ext = ext_of(&file_name);
+        let compile_args = if is_windows {
+            vec!["main.c".to_string(), "-o".to_string(), "main.exe".to_string()]
+        } else {
+            vec!["main.c".to_string(), "-o".to_string(), "main".to_string()]
+        };
+        let run_command = if is_windows { "main.exe" } else { "./main" };
+        configs.insert(
+            "clang".to_string(),
+            LanguageConfig {
+                display_name: "Clang C".to_string(),
+                file_name: file_name.clone(),
+                version_command: "clang --version".to_string(),
+                compile_command: Some("clang".to_string()),
+                compile_args,
+                run_command: run_command.to_string(),
+                run_args: vec![],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // g++ (gpp)
+    {
+        let file_name = "main.cpp".to_string();
+        let ext = ext_of(&file_name);
+        let compile_args = if is_windows {
+            vec!["main.cpp".to_string(), "-o".to_string(), "main.exe".to_string()]
+        } else {
+            vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()]
+        };
+        let run_command = if is_windows { "main.exe" } else { "./main" };
+        configs.insert(
+            "gpp".to_string(),
+            LanguageConfig {
+                display_name: "GNU C++".to_string(),
+                file_name: file_name.clone(),
+                version_command: "g++ --version".to_string(),
+                compile_command: Some("g++".to_string()),
+                compile_args: compile_args.clone(),
+                run_command: run_command.to_string(),
+                run_args: vec![],
+                file_extension: ext.clone(),
+            },
+        );
+    }
+
+    // clang++
+    {
+        let file_name = "main.cpp".to_string();
+        let ext = ext_of(&file_name);
+        let compile_args = if is_windows {
+            vec!["main.cpp".to_string(), "-o".to_string(), "main.exe".to_string()]
+        } else {
+            vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()]
+        };
+        let run_command = if is_windows { "main.exe" } else { "./main" };
+        configs.insert(
+            "clangpp".to_string(),
+            LanguageConfig {
+                display_name: "Clang C++".to_string(),
+                file_name: file_name.clone(),
+                version_command: "clang++ --version".to_string(),
+                compile_command: Some("clang++".to_string()),
+                compile_args,
+                run_command: run_command.to_string(),
+                run_args: vec![],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // rust
+    {
+        let file_name = "main.rs".to_string();
+        let ext = ext_of(&file_name);
+        let compile_args = if is_windows {
+            vec!["main.rs".to_string(), "-o".to_string(), "main.exe".to_string(), "--release".to_string()]
+        } else {
+            vec!["main.rs".to_string(), "-o".to_string(), "main".to_string(), "--release".to_string()]
+        };
+        let run_command = if is_windows { "main.exe" } else { "./main" };
+        configs.insert(
+            "rust".to_string(),
+            LanguageConfig {
+                display_name: "Rust".to_string(),
+                file_name: file_name.clone(),
+                version_command: "rustc --version".to_string(),
+                compile_command: Some("rustc".to_string()),
+                compile_args,
+                run_command: run_command.to_string(),
+                run_args: vec![],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // node
+    {
+        let file_name = "main.js".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "node".to_string(),
+            LanguageConfig {
+                display_name: "Node.js".to_string(),
+                file_name: file_name.clone(),
+                version_command: "node --version".to_string(),
+                compile_command: None,
+                compile_args: vec![],
+                run_command: "node".to_string(),
+                run_args: vec!["main.js".to_string()],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // go
+    {
+        let file_name = "main.go".to_string();
+        let ext = ext_of(&file_name);
+        let compile_args = if is_windows {
+            vec!["build".to_string(), "-o".to_string(), "main.exe".to_string(), "main.go".to_string()]
+        } else {
+            vec!["build".to_string(), "-o".to_string(), "main".to_string(), "main.go".to_string()]
+        };
+        let run_command = if is_windows { "main.exe" } else { "./main" };
+        configs.insert(
+            "go".to_string(),
+            LanguageConfig {
+                display_name: "Go".to_string(),
+                file_name: file_name.clone(),
+                version_command: "go version".to_string(),
+                compile_command: Some("go".to_string()),
+                compile_args,
+                run_command: run_command.to_string(),
+                run_args: vec![],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // csharp
+    {
+        let file_name = "Program.cs".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "csharp".to_string(),
+            LanguageConfig {
+                display_name: "C# (.NET)".to_string(),
+                file_name: file_name.clone(),
+                version_command: "dotnet --version".to_string(),
+                compile_command: Some("dotnet".to_string()),
+                compile_args: vec!["build".to_string()],
+                run_command: "dotnet".to_string(),
+                run_args: vec!["run".to_string()],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // psql
+    {
+        let file_name = "".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "psql".to_string(),
+            LanguageConfig {
+                display_name: "PostgreSQL (psql)".to_string(),
+                file_name: file_name.clone(),
+                version_command: "psql --version".to_string(),
+                compile_command: None,
+                compile_args: vec![],
+                run_command: "psql".to_string(),
+                run_args: vec![],
+                file_extension: ext,
+            },
+        );
+    }
+
+    // kotlin
+    {
+        let file_name = "Main.kt".to_string();
+        let ext = ext_of(&file_name);
+        configs.insert(
+            "kotlin".to_string(),
+            LanguageConfig {
+                display_name: "Kotlin".to_string(),
+                file_name: file_name.clone(),
+                version_command: "kotlinc -version".to_string(),
+                compile_command: Some("kotlinc".to_string()),
+                compile_args: vec!["Main.kt".to_string(), "-include-runtime".to_string(), "-d".to_string(), "Main.jar".to_string()],
+                run_command: "java".to_string(),
+                run_args: vec!["-jar".to_string(), "Main.jar".to_string()],
+                file_extension: ext,
+            },
+        );
+    }
+
+    configs
 }
 
 // Get supported language info (cross-platform)
