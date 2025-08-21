@@ -24,6 +24,10 @@ winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+core-foundation = "0.9"
+core-graphics = "0.24"
+objc = "0.2"
+cocoa = "0.24"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

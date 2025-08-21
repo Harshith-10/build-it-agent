@@ -16,11 +16,34 @@ use winapi::{
     },
 };
 
+#[cfg(target_os = "macos")]
+use core_foundation::array::CFArrayRef;
+#[cfg(target_os = "macos")]
+use core_foundation::base::{CFRelease, TCFType};
+#[cfg(target_os = "macos")]
+use core_foundation::dictionary::CFDictionaryRef;
+#[cfg(target_os = "macos")]
+use core_foundation::number::CFNumberRef;
+#[cfg(target_os = "macos")]
+use core_foundation::string::CFStringRef;
+#[cfg(target_os = "macos")]
+use core_graphics::window::{
+    kCGNullWindowID, CGWindowListCopyWindowInfo, CGWindowListOption,
+};
+#[cfg(target_os = "macos")]
+use cocoa::base::{id, nil};
+#[cfg(target_os = "macos")]
+use cocoa::foundation::NSString;
+#[cfg(target_os = "macos")]
+use objc::{class, msg_send, sel, sel_impl};
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StatusResponse {
     pub timestamp: String,
     pub forbidden_processes: Vec<String>,
     pub platform: String,
+    #[cfg(target_os = "macos")]
+    pub is_siri_active: bool
 }
 
 #[derive(Deserialize)]
@@ -201,6 +224,106 @@ fn enumerate_topmost_processes() -> Vec<String> {
     }
 
     process_names.into_inner().unwrap()
+}
+
+#[cfg(target_os = "macos")]
+fn is_siri_frontmost() -> bool {
+    unsafe {
+        let ws: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        if ws == nil { return false; }
+
+        let app: id = msg_send![ws, frontmostApplication];
+        if app == nil { return false; }
+
+        let bid: id = msg_send![app, bundleIdentifier];
+        if bid == nil { return false; }
+
+        let utf8: *const std::os::raw::c_char = msg_send![bid, UTF8String];
+        if utf8.is_null() { return false; }
+
+        let s = std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned();
+        s == "com.apple.Siri"
+            // Some macOS builds briefly surface Siri via these—keep them as fallbacks:
+            || s == "com.apple.assistantui"   // observed in some betas
+            || s == "com.apple.SiriNCService" // legacy/NC integration
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn bundle_id_for_pid(pid: i32) -> Option<String> {
+    unsafe {
+        let app: id = msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid];
+        if app == nil { return None; }
+        let bid: id = msg_send![app, bundleIdentifier];
+        if bid == nil { return None; }
+        let utf8: *const std::os::raw::c_char = msg_send![bid, UTF8String];
+        if utf8.is_null() { return None; }
+        Some(std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned())
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn is_siri_visible() -> bool {
+    unsafe {
+        let opts = CGWindowListOption::kCGWindowListOptionOnScreenOnly;
+        let arr: CFArrayRef = CGWindowListCopyWindowInfo(opts, kCGNullWindowID);
+        if arr.is_null() { return false; }
+
+        let count = core_foundation::array::CFArrayGetCount(arr);
+        let mut siri_found = false;
+
+        for i in 0..count {
+            let dict = core_foundation::array::CFArrayGetValueAtIndex(arr, i) as CFDictionaryRef;
+            if dict.is_null() { continue; }
+
+            // kCGWindowOwnerPID key
+            let pid_key: CFStringRef = unsafe {
+                extern "C" {
+                    // Apple publishes these externs; bind the constant by name.
+                    static kCGWindowOwnerPID: CFStringRef;
+                }
+                kCGWindowOwnerPID
+            };
+
+            let mut pid_val: *const std::ffi::c_void = std::ptr::null();
+            let has_pid = core_foundation::dictionary::CFDictionaryGetValueIfPresent(
+                dict,
+                pid_key as *const _,
+                &mut pid_val,
+            ) != 0;
+
+            if !has_pid || pid_val.is_null() { continue; }
+
+            let pid_cfnum = pid_val as CFNumberRef;
+            let mut pid_i32: i32 = 0;
+            let ok = core_foundation::number::CFNumberGetValue(
+                pid_cfnum,
+                core_foundation::number::kCFNumberSInt32Type,
+                &mut pid_i32 as *mut i32 as *mut _,
+            ) != 0;
+
+            if !ok { continue; }
+
+            if let Some(bid) = bundle_id_for_pid(pid_i32) {
+                if bid == "com.apple.Siri"
+                    || bid == "com.apple.assistantui"
+                    || bid == "com.apple.SiriNCService"
+                {
+                    siri_found = true;
+                    break;
+                }
+            }
+        }
+
+        CFRelease(arr as *const _);
+        siri_found
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn siri_overlay_active() -> bool {
+    // Fast frontmost check first, then window sweep:
+    is_siri_frontmost() || is_siri_visible()
 }
 
 #[cfg(not(windows))]
@@ -399,6 +522,8 @@ async fn status_handler(
         timestamp: Utc::now().to_rfc3339(),
         forbidden_processes,
         platform: platform.to_string(),
+        #[cfg(target_os = "macos")]
+        is_siri_active: siri_overlay_active()
     };
 
     Json(response)

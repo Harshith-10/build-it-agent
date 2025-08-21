@@ -2,3 +2,5 @@
 /target
 # ignore compiling test file
 /test
+
+Cargo.lock
