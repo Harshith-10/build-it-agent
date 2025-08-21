@@ -263,7 +263,7 @@ fn bundle_id_for_pid(pid: i32) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-pub fn is_siri_visible() -> bool {
+fn is_siri_visible() -> bool {
     unsafe {
         let opts = CGWindowListOption::kCGWindowListOptionOnScreenOnly;
         let arr: CFArrayRef = CGWindowListCopyWindowInfo(opts, kCGNullWindowID);
@@ -321,7 +321,7 @@ pub fn is_siri_visible() -> bool {
 }
 
 #[cfg(target_os = "macos")]
-pub fn siri_overlay_active() -> bool {
+fn siri_overlay_active() -> bool {
     // Fast frontmost check first, then window sweep:
     is_siri_frontmost() || is_siri_visible()
 }
