@@ -226,6 +226,7 @@ async fn execute_request(req: &ExecuteRequest, state: &AppState) -> Result<Execu
                 compiled: false,
                 language: req.language.clone(),
                 status: Some(ExecutionStatus::CompileError),
+                message: Some(String::from_utf8_lossy(&output.stderr).to_string()),
                 results: vec![],
                 total_duration_ms: 0,
             });
@@ -312,6 +313,7 @@ async fn execute_request(req: &ExecuteRequest, state: &AppState) -> Result<Execu
         compiled,
         language: req.language.clone(),
         status: Some(ExecutionStatus::Success),
+        message: None,
         results,
         total_duration_ms,
     })

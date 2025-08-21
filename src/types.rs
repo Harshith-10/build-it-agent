@@ -52,6 +52,9 @@ pub struct ExecuteResponse {
     pub language: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<ExecutionStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub results: Vec<CaseResult>,
     pub total_duration_ms: u64,
 }

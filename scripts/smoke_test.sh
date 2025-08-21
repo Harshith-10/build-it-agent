@@ -11,26 +11,28 @@ fi
 
 # Check languages
 langs_json=$(curl -fsS "$HOST/languages")
-if ! echo "$langs_json" | jq -e '.[] | select(.language=="python3")' >/dev/null; then
-  echo "Python3 not available according to /languages" >&2
+if ! echo "$langs_json" | jq -e '.[] | select(.language=="kotlin")' >/dev/null; then
+  echo "Kotlin not available according to /languages" >&2
   echo "$langs_json" | jq '.'
   exit 1
 fi
 
-echo "Python3 detected in /languages"
+echo "Kotlin detected in /languages"
 
-CODE=$(cat <<'PY'
-x = int(input())
-y = int(input()
-print(x + y)
-PY
+CODE=$(cat <<'KT'
+fun main() {
+    val a = readLine()!!.toInt()
+    val b = readLine()!!.toInt()
+    println(a + b)
+}
+KT
 )
 
 # Test input with newline
 input=$'10\n20\n'
 expected_output=$'30\n'
 
-payload=$(jq -n --arg lang python3 --arg code "$CODE" --arg input "$input" --arg expected "$expected_output" '{
+payload=$(jq -n --arg lang kotlin --arg code "$CODE" --arg input "$input" --arg expected "$expected_output" '{
   language: $lang,
   code: $code,
   testcases: [ { id: 1, input: $input, expected: $expected } ]
