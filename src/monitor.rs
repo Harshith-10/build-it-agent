@@ -1,8 +1,8 @@
 use anyhow::Result;
-use axum::{extract::Query, response::IntoResponse, routing::get, Json, Router};
+use axum::{extract::Query, response::IntoResponse, routing::{delete, get}, Json, Router};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use std::{collections::HashSet, net::SocketAddr, process::Command, sync::Arc};
 use sysinfo::System;
 
 #[cfg(windows)]
@@ -242,6 +242,81 @@ pub fn detect_forbidden_processes(forbidden_list: &[String], include_topmost: bo
     result
 }
 
+/// Attempt to terminate forbidden processes. Returns a sorted list of process names
+/// that couldn't be terminated automatically.
+pub fn terminate_forbidden_processes(forbidden_list: &[String], #[cfg(windows)] include_topmost: bool) -> Vec<String> {
+    let mut sys = System::new_all();
+    sys.refresh_processes();
+
+    let mut attempted = HashSet::new();
+    let mut failed = HashSet::new();
+
+    // Helper to attempt killing by pid
+    let try_kill = |pid: u32| -> bool {
+        let pid_str = pid.to_string();
+        #[cfg(windows)]
+        let status = Command::new("taskkill")
+            .args(["/PID", &pid_str, "/F"])
+            .status();
+
+        #[cfg(not(windows))]
+        let status = Command::new("kill")
+            .args(["-9", &pid_str])
+            .status();
+
+        match status {
+            Ok(s) if s.success() => true,
+            _ => false,
+        }
+    };
+
+    // Match running processes by forbidden list (case-insensitive substring)
+    for (_pid, process) in sys.processes() {
+        let pname = process.name().to_string();
+        let pname_lower = pname.to_lowercase();
+
+        for forbidden in forbidden_list {
+            let forbidden_lower = forbidden.to_lowercase();
+            if pname_lower.contains(&forbidden_lower) {
+                // Attempt to kill
+                let pid_u32 = process.pid().as_u32();
+                attempted.insert(pname.clone());
+                let ok = try_kill(pid_u32);
+                if !ok {
+                    failed.insert(pname.clone());
+                }
+                break; // avoid duplicate attempts for same process name
+            }
+        }
+    }
+
+    // If requested, also consider topmost window process names (Windows-only detection returns names)
+    #[cfg(windows)]
+    if include_topmost {
+        let top_names = enumerate_topmost_processes();
+        for tname in top_names {
+            let tname_lower = tname.to_lowercase();
+            // try to find matching processes by name and kill them
+            for (_pid, process) in sys.processes() {
+                let pname = process.name().to_string();
+                let pname_lower = pname.to_lowercase();
+                if pname_lower.contains(&tname_lower) {
+                    attempted.insert(pname.clone());
+                    let pid_u32 = process.pid().as_u32();
+                    let ok = try_kill(pid_u32);
+                    if !ok {
+                        failed.insert(pname.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<String> = failed.into_iter().collect();
+    result.sort();
+    result
+}
+
 pub fn build_app(forbidden_list: Arc<Vec<String>>) -> Router {
     Router::new().route(
         "/status",
@@ -250,6 +325,46 @@ pub fn build_app(forbidden_list: Arc<Vec<String>>) -> Router {
             move |query| status_handler(query, forbidden)
         }),
     )
+    .route(
+        "/processes",
+        delete({
+            let forbidden = forbidden_list.clone();
+            move |query| processes_handler(query, forbidden)
+        }),
+    )
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ProcessesResponse {
+    pub timestamp: String,
+    pub failed_to_terminate: Vec<String>,
+    pub platform: String,
+}
+
+async fn processes_handler(
+    #[cfg(windows)] Query(params): Query<StatusQuery>,
+    #[cfg(not(windows))] Query(_params): Query<StatusQuery>,
+    forbidden_list: Arc<Vec<String>>,
+) -> impl IntoResponse {
+    let platform = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "unknown"
+    };
+
+    let failed = terminate_forbidden_processes(&forbidden_list, #[cfg(windows)] params.include_topmost);
+
+    let response = ProcessesResponse {
+        timestamp: Utc::now().to_rfc3339(),
+        failed_to_terminate: failed,
+        platform: platform.to_string(),
+    };
+
+    Json(response)
 }
 
 async fn status_handler(
