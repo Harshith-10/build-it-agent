@@ -332,6 +332,7 @@ pub fn build_app(forbidden_list: Arc<Vec<String>>) -> Router {
             move |query| processes_handler(query, forbidden)
         }),
     )
+    .route("/version", get(version_handler))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -339,6 +340,17 @@ pub struct ProcessesResponse {
     pub timestamp: String,
     pub failed_to_terminate: Vec<String>,
     pub platform: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VersionResponse {
+    pub version: String,
+}
+
+async fn version_handler() -> impl IntoResponse {
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    let response = VersionResponse { version };
+    Json(response)
 }
 
 async fn processes_handler(
