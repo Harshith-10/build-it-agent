@@ -1,9 +1,16 @@
 use anyhow::Result;
-use axum::{extract::Query, response::IntoResponse, routing::{delete, get}, Json, Router};
+use axum::{
+    extract::Query,
+    response::IntoResponse,
+    routing::{delete, get},
+    Json, Router,
+};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, net::SocketAddr, process::Command, sync::Arc};
 use sysinfo::System;
+use tower_http::cors;
+use axum::http::HeaderValue;
 
 #[cfg(windows)]
 use std::sync::Mutex;
@@ -17,6 +24,10 @@ use winapi::{
 };
 
 #[cfg(target_os = "macos")]
+use cocoa::base::{id, nil};
+#[cfg(target_os = "macos")]
+use cocoa::foundation::NSString;
+#[cfg(target_os = "macos")]
 use core_foundation::array::CFArrayRef;
 #[cfg(target_os = "macos")]
 use core_foundation::base::{CFRelease, TCFType};
@@ -27,13 +38,7 @@ use core_foundation::number::CFNumberRef;
 #[cfg(target_os = "macos")]
 use core_foundation::string::CFStringRef;
 #[cfg(target_os = "macos")]
-use core_graphics::window::{
-    kCGNullWindowID, CGWindowListCopyWindowInfo, CGWindowListOption,
-};
-#[cfg(target_os = "macos")]
-use cocoa::base::{id, nil};
-#[cfg(target_os = "macos")]
-use cocoa::foundation::NSString;
+use core_graphics::window::{kCGNullWindowID, CGWindowListCopyWindowInfo, CGWindowListOption};
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 
@@ -43,7 +48,7 @@ pub struct StatusResponse {
     pub forbidden_processes: Vec<String>,
     pub platform: String,
     #[cfg(target_os = "macos")]
-    pub is_siri_active: bool
+    pub is_siri_active: bool,
 }
 
 #[derive(Deserialize)]
@@ -230,18 +235,28 @@ fn enumerate_topmost_processes() -> Vec<String> {
 fn is_siri_frontmost() -> bool {
     unsafe {
         let ws: id = msg_send![class!(NSWorkspace), sharedWorkspace];
-        if ws == nil { return false; }
+        if ws == nil {
+            return false;
+        }
 
         let app: id = msg_send![ws, frontmostApplication];
-        if app == nil { return false; }
+        if app == nil {
+            return false;
+        }
 
         let bid: id = msg_send![app, bundleIdentifier];
-        if bid == nil { return false; }
+        if bid == nil {
+            return false;
+        }
 
         let utf8: *const std::os::raw::c_char = msg_send![bid, UTF8String];
-        if utf8.is_null() { return false; }
+        if utf8.is_null() {
+            return false;
+        }
 
-        let s = std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned();
+        let s = std::ffi::CStr::from_ptr(utf8)
+            .to_string_lossy()
+            .into_owned();
         s == "com.apple.Siri"
             // Some macOS builds briefly surface Siri via these—keep them as fallbacks:
             || s == "com.apple.assistantui"   // observed in some betas
@@ -252,13 +267,24 @@ fn is_siri_frontmost() -> bool {
 #[cfg(target_os = "macos")]
 fn bundle_id_for_pid(pid: i32) -> Option<String> {
     unsafe {
-        let app: id = msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid];
-        if app == nil { return None; }
+        let app: id =
+            msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid];
+        if app == nil {
+            return None;
+        }
         let bid: id = msg_send![app, bundleIdentifier];
-        if bid == nil { return None; }
+        if bid == nil {
+            return None;
+        }
         let utf8: *const std::os::raw::c_char = msg_send![bid, UTF8String];
-        if utf8.is_null() { return None; }
-        Some(std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned())
+        if utf8.is_null() {
+            return None;
+        }
+        Some(
+            std::ffi::CStr::from_ptr(utf8)
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
 }
 
@@ -267,14 +293,18 @@ fn is_siri_visible() -> bool {
     unsafe {
         let opts = CGWindowListOption::kCGWindowListOptionOnScreenOnly;
         let arr: CFArrayRef = CGWindowListCopyWindowInfo(opts, kCGNullWindowID);
-        if arr.is_null() { return false; }
+        if arr.is_null() {
+            return false;
+        }
 
         let count = core_foundation::array::CFArrayGetCount(arr);
         let mut siri_found = false;
 
         for i in 0..count {
             let dict = core_foundation::array::CFArrayGetValueAtIndex(arr, i) as CFDictionaryRef;
-            if dict.is_null() { continue; }
+            if dict.is_null() {
+                continue;
+            }
 
             // kCGWindowOwnerPID key
             let pid_key: CFStringRef = unsafe {
@@ -292,7 +322,9 @@ fn is_siri_visible() -> bool {
                 &mut pid_val,
             ) != 0;
 
-            if !has_pid || pid_val.is_null() { continue; }
+            if !has_pid || pid_val.is_null() {
+                continue;
+            }
 
             let pid_cfnum = pid_val as CFNumberRef;
             let mut pid_i32: i32 = 0;
@@ -302,7 +334,9 @@ fn is_siri_visible() -> bool {
                 &mut pid_i32 as *mut i32 as *mut _,
             ) != 0;
 
-            if !ok { continue; }
+            if !ok {
+                continue;
+            }
 
             if let Some(bid) = bundle_id_for_pid(pid_i32) {
                 if bid == "com.apple.Siri"
@@ -367,7 +401,10 @@ pub fn detect_forbidden_processes(forbidden_list: &[String], include_topmost: bo
 
 /// Attempt to terminate forbidden processes. Returns a sorted list of process names
 /// that couldn't be terminated automatically.
-pub fn terminate_forbidden_processes(forbidden_list: &[String], #[cfg(windows)] include_topmost: bool) -> Vec<String> {
+pub fn terminate_forbidden_processes(
+    forbidden_list: &[String],
+    #[cfg(windows)] include_topmost: bool,
+) -> Vec<String> {
     let mut sys = System::new_all();
     sys.refresh_processes();
 
@@ -383,9 +420,7 @@ pub fn terminate_forbidden_processes(forbidden_list: &[String], #[cfg(windows)] 
             .status();
 
         #[cfg(not(windows))]
-        let status = Command::new("kill")
-            .args(["-9", &pid_str])
-            .status();
+        let status = Command::new("kill").args(["-9", &pid_str]).status();
 
         match status {
             Ok(s) if s.success() => true,
@@ -441,21 +476,28 @@ pub fn terminate_forbidden_processes(forbidden_list: &[String], #[cfg(windows)] 
 }
 
 pub fn build_app(forbidden_list: Arc<Vec<String>>) -> Router {
-    Router::new().route(
-        "/status",
-        get({
-            let forbidden = forbidden_list.clone();
-            move |query| status_handler(query, forbidden)
-        }),
-    )
-    .route(
-        "/processes",
-        delete({
-            let forbidden = forbidden_list.clone();
-            move |query| processes_handler(query, forbidden)
-        }),
-    )
-    .route("/version", get(version_handler))
+    Router::new()
+        .route(
+            "/status",
+            get({
+                let forbidden = forbidden_list.clone();
+                move |query| status_handler(query, forbidden)
+            }),
+        )
+        .route(
+            "/processes",
+            delete({
+                let forbidden = forbidden_list.clone();
+                move |query| processes_handler(query, forbidden)
+            }),
+        )
+        .route("/version", get(version_handler))
+        .layer(
+            cors::CorsLayer::new()
+                .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+                .allow_methods(cors::Any)
+                .allow_headers(cors::Any),
+        )
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -491,7 +533,11 @@ async fn processes_handler(
         "unknown"
     };
 
-    let failed = terminate_forbidden_processes(&forbidden_list, #[cfg(windows)] params.include_topmost);
+    let failed = terminate_forbidden_processes(
+        &forbidden_list,
+        #[cfg(windows)]
+        params.include_topmost,
+    );
 
     let response = ProcessesResponse {
         timestamp: Utc::now().to_rfc3339(),
@@ -523,7 +569,7 @@ async fn status_handler(
         forbidden_processes,
         platform: platform.to_string(),
         #[cfg(target_os = "macos")]
-        is_siri_active: siri_overlay_active()
+        is_siri_active: siri_overlay_active(),
     };
 
     Json(response)

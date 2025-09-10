@@ -1,6 +1,7 @@
 use crate::language::{generate_language_configs, get_installed_languages, LanguageConfig};
 use crate::types::{CaseResult, ExecuteRequest, ExecuteResponse, ExecutionStatus};
 use anyhow::Result;
+use axum::http::HeaderValue;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -9,6 +10,7 @@ use axum::{
     Json, Router,
 };
 use serde::Serialize;
+use tower_http::cors;
 use std::collections::{HashMap, HashSet};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -103,7 +105,13 @@ pub async fn run() -> Result<()> {
         .route("/languages", get(languages_handler))
         .route("/execute", post(enqueue_handler))
         .route("/status/:id", get(status_handler))
-        .with_state(state);
+        .with_state(state)
+        .layer(
+            cors::CorsLayer::new()
+                .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+                .allow_methods(cors::Any)
+                .allow_headers(cors::Any),
+        );
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8910));
     println!("Executor listening on http://{}", addr);
