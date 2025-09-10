@@ -239,12 +239,12 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
         );
     }
 
-    // node
+    // javascript
     {
         let file_name = "main.js".to_string();
         let ext = ext_of(&file_name);
         configs.insert(
-            "node".to_string(),
+            "javascript".to_string(),
             LanguageConfig {
                 display_name: "JavaScript".to_string(),
                 file_name: file_name.clone(),
