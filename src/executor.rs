@@ -109,6 +109,7 @@ pub async fn run() -> Result<()> {
         .layer(
             cors::CorsLayer::new()
                 .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+                .allow_origin("http://172.16.7.253:3000".parse::<HeaderValue>().unwrap())
                 .allow_methods(cors::Any)
                 .allow_headers(cors::Any),
         );
