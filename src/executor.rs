@@ -1,7 +1,6 @@
 use crate::language::{generate_language_configs, get_installed_languages, LanguageConfig};
 use crate::types::{CaseResult, ExecuteRequest, ExecuteResponse, ExecutionStatus};
 use anyhow::Result;
-use axum::http::HeaderValue;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
