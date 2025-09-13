@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, net::SocketAddr, process::Command, sync::Arc};
 use sysinfo::System;
 use tower_http::cors;
-use axum::http::HeaderValue;
 
 #[cfg(windows)]
 use std::sync::Mutex;
