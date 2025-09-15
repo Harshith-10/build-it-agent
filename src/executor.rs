@@ -224,7 +224,13 @@ async fn execute_request(req: &ExecuteRequest, state: &AppState) -> Result<Execu
     // Compile if needed
     let mut compiled = false;
     if let Some(compile_command) = &cfg.compile_command {
-        let mut cmd = Command::new(compile_command);
+        let mut cmd = if cfg!(windows) {
+            let mut c = Command::new("cmd");
+            c.args(&["/C", compile_command]);
+            c
+        } else {
+            Command::new(compile_command)
+        };
         cmd.current_dir(&work_dir);
         cmd.args(&cfg.compile_args);
         let output = cmd.output().await?;
@@ -244,7 +250,13 @@ async fn execute_request(req: &ExecuteRequest, state: &AppState) -> Result<Execu
     let mut results = Vec::with_capacity(req.testcases.len());
     let mut total_duration_ms: u64 = 0;
     for tc in &req.testcases {
-        let mut cmd = Command::new(&cfg.run_command);
+        let mut cmd = if cfg!(windows) {
+            let mut c = Command::new("cmd");
+            c.args(&["/C", &cfg.run_command]);
+            c
+        } else {
+            Command::new(&cfg.run_command)
+        };
         cmd.current_dir(&work_dir);
         cmd.args(&cfg.run_args);
         cmd.stdin(std::process::Stdio::piped());
