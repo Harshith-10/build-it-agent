@@ -112,7 +112,7 @@ pub async fn run() -> Result<()> {
                 .allow_headers(cors::Any),
         );
 
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8910));
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 1], 8910));
     println!("Executor listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;

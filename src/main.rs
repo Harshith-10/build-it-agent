@@ -1,19 +1,10 @@
 use anyhow::Result;
 mod executor;
 mod language;
-mod monitor;
 mod types;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Run both services in parallel
-    tokio::try_join!(
-        async {
-            executor::run().await
-        },
-        async {
-            monitor::run().await
-        }
-    )?;
+    let _ = executor::run().await;
     Ok(())
 }
