@@ -25,8 +25,6 @@ pub struct LanguageInfo {
 // Load language configurations from JSON and select platform-specific settings
 pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     // Hardcoded language configurations (previously in `languages.json`).
-    // Platform-specific differences are selected at runtime using cfg!(windows).
-    let is_windows = cfg!(windows);
     let mut configs: HashMap<String, LanguageConfig> = HashMap::new();
 
     let ext_of = |fname: &str| -> String {
@@ -49,7 +47,7 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
                 version_command: "python3 --version".to_string(),
                 compile_command: None,
                 compile_args: vec![],
-                run_command: if is_windows { "python" } else { "python3" }.to_string(),
+                run_command: "python3".to_string(),
                 run_args: vec!["main.py".to_string()],
                 file_extension: ext,
             },
@@ -98,16 +96,8 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     {
         let file_name = "main.c".to_string();
         let ext = ext_of(&file_name);
-        let compile_args = if is_windows {
-            vec![
-                "main.c".to_string(),
-                "-o".to_string(),
-                "main.exe".to_string(),
-            ]
-        } else {
-            vec!["main.c".to_string(), "-o".to_string(), "main".to_string()]
-        };
-        let run_command = if is_windows { "main.exe" } else { "./main" };
+        let compile_args = vec!["main.c".to_string(), "-o".to_string(), "main".to_string()];
+        let run_command = "./main";
         configs.insert(
             "gcc".to_string(),
             LanguageConfig {
@@ -127,16 +117,8 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     {
         let file_name = "main.c".to_string();
         let ext = ext_of(&file_name);
-        let compile_args = if is_windows {
-            vec![
-                "main.c".to_string(),
-                "-o".to_string(),
-                "main.exe".to_string(),
-            ]
-        } else {
-            vec!["main.c".to_string(), "-o".to_string(), "main".to_string()]
-        };
-        let run_command = if is_windows { "main.exe" } else { "./main" };
+        let compile_args = vec!["main.c".to_string(), "-o".to_string(), "main".to_string()];
+        let run_command = "./main";
         configs.insert(
             "clang".to_string(),
             LanguageConfig {
@@ -156,16 +138,8 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     {
         let file_name = "main.cpp".to_string();
         let ext = ext_of(&file_name);
-        let compile_args = if is_windows {
-            vec![
-                "main.cpp".to_string(),
-                "-o".to_string(),
-                "main.exe".to_string(),
-            ]
-        } else {
-            vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()]
-        };
-        let run_command = if is_windows { "main.exe" } else { "./main" };
+        let compile_args = vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()];
+        let run_command = "./main" ;
         configs.insert(
             "gpp".to_string(),
             LanguageConfig {
@@ -185,16 +159,8 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     {
         let file_name = "main.cpp".to_string();
         let ext = ext_of(&file_name);
-        let compile_args = if is_windows {
-            vec![
-                "main.cpp".to_string(),
-                "-o".to_string(),
-                "main.exe".to_string(),
-            ]
-        } else {
-            vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()]
-        };
-        let run_command = if is_windows { "main.exe" } else { "./main" };
+        let compile_args = vec!["main.cpp".to_string(), "-o".to_string(), "main".to_string()];
+        let run_command = "./main" ;
         configs.insert(
             "clangpp".to_string(),
             LanguageConfig {
@@ -214,16 +180,8 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     {
         let file_name = "main.rs".to_string();
         let ext = ext_of(&file_name);
-        let compile_args = if is_windows {
-            vec![
-                "main.rs".to_string(),
-                "-o".to_string(),
-                "main.exe".to_string(),
-            ]
-        } else {
-            vec!["main.rs".to_string(), "-o".to_string(), "main".to_string()]
-        };
-        let run_command = if is_windows { "main.exe" } else { "./main" };
+        let compile_args = vec!["main.rs".to_string(), "-o".to_string(), "main".to_string()];
+        let run_command = "./main";
         configs.insert(
             "rust".to_string(),
             LanguageConfig {
@@ -262,22 +220,13 @@ pub fn generate_language_configs() -> HashMap<String, LanguageConfig> {
     {
         let file_name = "main.go".to_string();
         let ext = ext_of(&file_name);
-        let compile_args = if is_windows {
-            vec![
-                "build".to_string(),
-                "-o".to_string(),
-                "main.exe".to_string(),
-                "main.go".to_string(),
-            ]
-        } else {
-            vec![
-                "build".to_string(),
-                "-o".to_string(),
-                "main".to_string(),
-                "main.go".to_string(),
-            ]
-        };
-        let run_command = if is_windows { "main.exe" } else { "./main" };
+        let compile_args = vec![
+            "build".to_string(),
+            "-o".to_string(),
+            "main".to_string(),
+            "main.go".to_string(),
+        ];
+        let run_command = "./main";
         configs.insert(
             "go".to_string(),
             LanguageConfig {
@@ -381,11 +330,7 @@ pub async fn get_installed_languages(
         // Spawn an async task per language detection command.
         tasks.push(async move {
             // Use the platform shell so complex commands / flags work.
-            let mut cmd = if cfg!(windows) {
-                let mut c = TokioCommand::new("cmd");
-                c.args(&["/C", &cmd_str]);
-                c
-            } else {
+            let mut cmd = {
                 let mut c = TokioCommand::new("sh");
                 c.arg("-c").arg(&cmd_str);
                 c
