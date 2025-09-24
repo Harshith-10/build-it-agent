@@ -1,4 +1,5 @@
 use crate::language::{generate_language_configs, get_installed_languages, LanguageConfig};
+use crate::rusq::{MpmcQueue, RusqConfig};
 use crate::types::{CaseResult, ExecuteRequest, ExecuteResponse, ExecutionStatus};
 use anyhow::Result;
 use axum::{
@@ -15,11 +16,11 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tempfile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::RwLock;
 use tokio::time;
 
 #[derive(Clone)]
@@ -28,7 +29,7 @@ struct AppState {
     available: Arc<HashSet<String>>,               // installed language keys
     langs_list: Arc<Vec<LanguageSummary>>,         // for GET /languages
     jobs: Arc<RwLock<HashMap<u64, JobState>>>,
-    sender: mpsc::Sender<(u64, ExecuteRequest)>,
+    queue: Arc<MpmcQueue<(u64, ExecuteRequest)>>,
     next_id: Arc<AtomicU64>,
 }
 
@@ -65,7 +66,7 @@ enum JobState {
     Error(String),
 }
 
-pub async fn run() -> Result<()> {
+pub async fn run(worker_count: usize) -> Result<()> {
     // Build language configs and detect installed ones once at startup
     let configs = generate_language_configs();
     let installed = get_installed_languages(&configs).await;
@@ -86,18 +87,27 @@ pub async fn run() -> Result<()> {
             .collect::<Vec<_>>()
     );
 
-    let (tx, rx) = mpsc::channel::<(u64, ExecuteRequest)>(100);
+    // Create RusQ MPMC queue
+    let queue_config = RusqConfig {
+        capacity: Some(10000),
+        enable_priority: true,
+        max_retries: 3,
+        consumer_timeout_ms: 1000,
+        enable_metrics: true,
+    };
+    let queue = Arc::new(MpmcQueue::new(queue_config));
+
     let state = AppState {
         configs: Arc::new(configs),
         available: Arc::new(available),
         langs_list: Arc::new(langs_list),
         jobs: Arc::new(RwLock::new(HashMap::new())),
-        sender: tx,
+        queue: queue.clone(),
         next_id: Arc::new(AtomicU64::new(1)),
     };
 
-    // Spawn worker loop
-    tokio::spawn(worker_loop(state.clone(), rx));
+    // Spawn worker pool
+    spawn_worker_pool(state.clone(), worker_count).await;
 
     let app = Router::new()
         .route("/health", get(health_handler))
@@ -119,21 +129,71 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
-async fn worker_loop(state: AppState, mut rx: mpsc::Receiver<(u64, ExecuteRequest)>) {
-    while let Some((id, req)) = rx.recv().await {
-        {
-            let mut jobs = state.jobs.write().await;
-            jobs.insert(id, JobState::Running);
-        }
+async fn spawn_worker_pool(state: AppState, worker_count: usize) {
+    println!("Spawning {} workers for job processing", worker_count);
+    
+    for worker_id in 0..worker_count {
+        let state_clone = state.clone();
+        let consumer = state.queue.consumer();
+        
+        // Try to set core affinity if available
+        tokio::spawn(async move {
+            // If possible, set core affinity for this worker
+            if let Some(core_id) = core_affinity::get_core_ids().and_then(|cores| cores.get(worker_id % cores.len()).copied()) {
+                if core_affinity::set_for_current(core_id) {
+                    println!("Worker {} pinned to core {:?}", worker_id, core_id);
+                } else {
+                    println!("Worker {} failed to pin to core {:?}", worker_id, core_id);
+                }
+            }
+            
+            worker_loop(worker_id, state_clone, consumer).await;
+        });
+    }
+}
 
-        let res = execute_request(&req, &state).await;
-        let mut jobs = state.jobs.write().await;
-        match res {
-            Ok(resp) => {
-                jobs.insert(id, JobState::Completed(resp));
+async fn worker_loop(worker_id: usize, state: AppState, consumer: crate::rusq::Consumer<(u64, ExecuteRequest)>) {
+    println!("Worker {} started", worker_id);
+    
+    loop {
+        // Try to receive a job from the queue
+        match consumer.recv_timeout(Duration::from_secs(1)) {
+            Ok(message) => {
+                let (id, req) = message.payload;
+                
+                // Mark job as running
+                {
+                    let mut jobs = state.jobs.write().await;
+                    jobs.insert(id, JobState::Running);
+                }
+
+                // Execute the request
+                let res = execute_request(&req, &state).await;
+                
+                // Update job state
+                {
+                    let mut jobs = state.jobs.write().await;
+                    match res {
+                        Ok(resp) => {
+                            jobs.insert(id, JobState::Completed(resp));
+                        }
+                        Err(e) => {
+                            jobs.insert(id, JobState::Error(e.to_string()));
+                        }
+                    }
+                }
+            }
+            Err(crate::rusq::RusqError::Timeout) => {
+                // Normal timeout, continue loop
+                continue;
+            }
+            Err(crate::rusq::RusqError::QueueShutdown) => {
+                println!("Worker {} shutting down due to queue shutdown", worker_id);
+                break;
             }
             Err(e) => {
-                jobs.insert(id, JobState::Error(e.to_string()));
+                println!("Worker {} encountered error: {:?}", worker_id, e);
+                continue;
             }
         }
     }
@@ -171,11 +231,14 @@ async fn enqueue_handler(
         let mut jobs = state.jobs.write().await;
         jobs.insert(id, JobState::Queued);
     }
-    // Ensure code is written against the configured filename
-    // We don't modify request here; execution uses config info
-    if let Err(e) = state.sender.send((id, req.clone())).await {
+    // Enqueue the job using RusQ
+    let producer = state.queue.producer();
+    let message = crate::rusq::Message::new((id, req.clone()), "execution".to_string())
+        .with_priority(crate::rusq::Priority::Normal);
+    
+    if let Err(e) = producer.send_message(message) {
         let mut jobs = state.jobs.write().await;
-        jobs.insert(id, JobState::Error(format!("queue error: {}", e)));
+        jobs.insert(id, JobState::Error(format!("queue error: {:?}", e)));
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "Failed to enqueue job"})),

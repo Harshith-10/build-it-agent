@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Message priority levels
+// Message priority levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Priority {
     Low = 0,
@@ -14,7 +14,7 @@ pub enum Priority {
     Critical = 3,
 }
 
-/// A message wrapper that contains metadata
+// A message wrapper that contains metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message<T> {
     pub id: u64,
@@ -43,18 +43,18 @@ impl<T> Message<T> {
     }
 }
 
-/// Configuration for the MPMC queue
+// Configuration for the MPMC queue
 #[derive(Debug, Clone)]
 pub struct RusqConfig {
-    /// Bounded channel capacity (None for unbounded)
+    // Bounded channel capacity (None for unbounded)
     pub capacity: Option<usize>,
-    /// Enable priority queuing
+    // Enable priority queuing
     pub enable_priority: bool,
-    /// Maximum retry attempts for failed messages
+    // Maximum retry attempts for failed messages
     pub max_retries: u32,
-    /// Consumer timeout in milliseconds
+    // Consumer timeout in milliseconds
     pub consumer_timeout_ms: u64,
-    /// Enable metrics collection
+    // Enable metrics collection
     pub enable_metrics: bool,
 }
 
@@ -70,7 +70,7 @@ impl Default for RusqConfig {
     }
 }
 
-/// Metrics for monitoring queue performance
+// Metrics for monitoring queue performance
 #[derive(Debug, Default)]
 pub struct RusqMetrics {
     pub messages_sent: AtomicU64,
@@ -140,7 +140,7 @@ pub struct MetricsSnapshot {
     pub active_consumers: u64,
 }
 
-/// High-performance MPMC Message Queue
+// High-performance MPMC Message Queue
 pub struct MpmcQueue<T> {
     // Priority queues for different priority levels
     critical_sender: Sender<Message<T>>,
@@ -165,7 +165,7 @@ impl<T> MpmcQueue<T>
 where
     T: Clone + Send + 'static,
 {
-    /// Create a new MPMC queue with the given configuration
+    // Create a new MPMC queue with the given configuration
     pub fn new(config: RusqConfig) -> Self {
         let create_channel = |capacity: Option<usize>| {
             if let Some(cap) = capacity {
@@ -198,7 +198,7 @@ where
         }
     }
 
-    /// Create a producer handle for sending messages
+    // Create a producer handle for sending messages
     pub fn producer(&self) -> Producer<T> {
         if self.config.enable_metrics {
             self.metrics.add_producer();
@@ -215,7 +215,7 @@ where
         }
     }
 
-    /// Create a consumer handle for receiving messages
+    // Create a consumer handle for receiving messages
     pub fn consumer(&self) -> Consumer<T> {
         if self.config.enable_metrics {
             self.metrics.add_consumer();
@@ -233,7 +233,7 @@ where
         }
     }
 
-    /// Get a handle to the dead letter queue
+    // Get a handle to the dead letter queue
     pub fn dead_letter_queue(&self) -> DeadLetterQueue<T> {
         DeadLetterQueue {
             dlq_receiver: self.dlq_receiver.clone(),
@@ -241,23 +241,23 @@ where
         }
     }
 
-    /// Get current queue metrics
+    // Get current queue metrics
     pub fn metrics(&self) -> MetricsSnapshot {
         self.metrics.snapshot()
     }
 
-    /// Shutdown the queue gracefully
+    // Shutdown the queue gracefully
     pub fn shutdown(&self) {
         self.is_shutdown.store(true, Ordering::SeqCst);
     }
 
-    /// Check if the queue is shutdown
+    // Check if the queue is shutdown
     pub fn is_shutdown(&self) -> bool {
         self.is_shutdown.load(Ordering::SeqCst)
     }
 }
 
-/// Producer handle for sending messages to the queue
+// Producer handle for sending messages to the queue
 pub struct Producer<T> {
     critical_sender: Sender<Message<T>>,
     high_sender: Sender<Message<T>>,
@@ -272,19 +272,19 @@ impl<T> Producer<T>
 where
     T: Clone + Send,
 {
-    /// Send a message with default priority
+    // Send a message with default priority
     pub fn send(&self, payload: T, topic: String) -> Result<(), RusqError> {
         let message = Message::new(payload, topic);
         self.send_message(message)
     }
 
-    /// Send a message with specified priority
+    // Send a message with specified priority
     pub fn send_with_priority(&self, payload: T, topic: String, priority: Priority) -> Result<(), RusqError> {
         let message = Message::new(payload, topic).with_priority(priority);
         self.send_message(message)
     }
 
-    /// Send a pre-constructed message
+    // Send a pre-constructed message
     pub fn send_message(&self, message: Message<T>) -> Result<(), RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
             return Err(RusqError::QueueShutdown);
@@ -309,13 +309,13 @@ where
         }
     }
 
-    /// Send a message with blocking behavior
+    // Send a message with blocking behavior
     pub fn send_blocking(&self, payload: T, topic: String) -> Result<(), RusqError> {
         let message = Message::new(payload, topic);
         self.send_message_blocking(message)
     }
 
-    /// Send a pre-constructed message with blocking behavior
+    // Send a pre-constructed message with blocking behavior
     pub fn send_message_blocking(&self, message: Message<T>) -> Result<(), RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
             return Err(RusqError::QueueShutdown);
@@ -346,7 +346,7 @@ impl<T> Drop for Producer<T> {
     }
 }
 
-/// Consumer handle for receiving messages from the queue
+// Consumer handle for receiving messages from the queue
 pub struct Consumer<T> {
     critical_receiver: Receiver<Message<T>>,
     high_receiver: Receiver<Message<T>>,
@@ -362,7 +362,7 @@ impl<T> Consumer<T>
 where
     T: Clone + Send,
 {
-    /// Receive a message with priority ordering (non-blocking)
+    // Receive a message with priority ordering (non-blocking)
     pub fn try_recv(&self) -> Result<Message<T>, RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
             return Err(RusqError::QueueShutdown);
@@ -414,7 +414,7 @@ where
         }
     }
 
-    /// Receive a message with priority ordering (blocking with timeout)
+    // Receive a message with priority ordering (blocking with timeout)
     pub fn recv_timeout(&self, timeout: Duration) -> Result<Message<T>, RusqError> {
         if self.is_shutdown.load(Ordering::SeqCst) {
             return Err(RusqError::QueueShutdown);
@@ -484,12 +484,12 @@ where
         }
     }
 
-    /// Receive a message with priority ordering (blocking)
+    // Receive a message with priority ordering (blocking)
     pub fn recv(&self) -> Result<Message<T>, RusqError> {
         self.recv_timeout(Duration::from_millis(self.config.consumer_timeout_ms))
     }
 
-    /// Mark a message as failed and potentially send to DLQ
+    // Mark a message as failed and potentially send to DLQ
     pub fn nack(&self, mut message: Message<T>) -> Result<(), RusqError> {
         message.retry_count += 1;
 
@@ -530,14 +530,14 @@ impl<T> Drop for Consumer<T> {
     }
 }
 
-/// Handle for accessing the dead letter queue
+// Handle for accessing the dead letter queue
 pub struct DeadLetterQueue<T> {
     dlq_receiver: Receiver<Message<T>>,
     metrics: Arc<RusqMetrics>,
 }
 
 impl<T> DeadLetterQueue<T> {
-    /// Get a failed message from the dead letter queue
+    // Get a failed message from the dead letter queue
     pub fn try_recv(&self) -> Result<Message<T>, RusqError> {
         match self.dlq_receiver.try_recv() {
             Ok(msg) => Ok(msg),
@@ -546,7 +546,7 @@ impl<T> DeadLetterQueue<T> {
         }
     }
 
-    /// Get a failed message from the dead letter queue with timeout
+    // Get a failed message from the dead letter queue with timeout
     pub fn recv_timeout(&self, timeout: Duration) -> Result<Message<T>, RusqError> {
         match self.dlq_receiver.recv_timeout(timeout) {
             Ok(msg) => Ok(msg),
@@ -555,7 +555,7 @@ impl<T> DeadLetterQueue<T> {
     }
 }
 
-/// Error types for the MPMC queue
+// Error types for the MPMC queue
 #[derive(Debug, Clone, PartialEq)]
 pub enum RusqError {
     QueueFull,
