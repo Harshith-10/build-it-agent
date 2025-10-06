@@ -28,8 +28,8 @@ winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi"]
 libc = "0.2"
 core-foundation = "0.9"
 core-graphics = "0.24"
-objc = "0.2"
-cocoa = "0.24"
+objc = "0.2.7"
+cocoa = "0.25"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
