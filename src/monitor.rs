@@ -9,6 +9,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, net::SocketAddr, process::Command, sync::Arc};
 use sysinfo::System;
+use tokio::sync::oneshot;
 use tower_http::cors;
 
 #[cfg(windows)]
@@ -572,8 +573,8 @@ async fn status_handler(
     Json(response)
 }
 
-pub async fn run() -> Result<()> {
-    println!("Starting cross-platform process monitor...");
+pub async fn run(ready_tx: Option<oneshot::Sender<()>>) -> Result<()> {
+    println!("Starting process monitor...");
 
     let forbidden_list = Arc::new(get_default_forbidden_list());
 
@@ -595,14 +596,17 @@ pub async fn run() -> Result<()> {
     );
 
     let app = build_app(forbidden_list.clone());
-    
+
     let port = 8765;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    println!("Process monitor listening on http://{}", addr);
-    println!("Try: curl http://localhost:{}/status", port);
-    println!("With topmost detection (Windows only): curl 'http://localhost:{}/status?include_topmost=true'", port);
-
     let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("🟢 Process monitor is running...\n");
+    if let Some(tx) = ready_tx {
+        let _ = tx.send(());
+    }
+    // println!("Try: curl http://localhost:{}/status", port);
+    // println!("With topmost detection (Windows only): curl 'http://localhost:{}/status?include_topmost=true'", port);
+
     axum::serve(listener, app).await?;
 
     Ok(())

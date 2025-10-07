@@ -19,7 +19,7 @@ use std::time::Instant;
 use tempfile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::time;
 
 #[derive(Clone)]
@@ -65,7 +65,7 @@ enum JobState {
     Error(String),
 }
 
-pub async fn run() -> Result<()> {
+pub async fn run(ready_tx: Option<oneshot::Sender<()>>) -> Result<()> {
     // Build language configs and detect installed ones once at startup
     let configs = generate_language_configs();
     let installed = get_installed_languages(&configs).await;
@@ -78,13 +78,10 @@ pub async fn run() -> Result<()> {
         })
         .collect();
 
-    println!(
-        "Executor detected languages: {:?}",
-        langs_list
-            .iter()
-            .map(|l| format!("{} ({})", l.display_name, l.language))
-            .collect::<Vec<_>>()
-    );
+    println!("Executor detected {} languages:", langs_list.len());
+    for (i, lang) in langs_list.iter().enumerate() {
+        println!("{}: {} ({})", i + 1, lang.display_name, lang.language);
+    }
 
     let (tx, rx) = mpsc::channel::<(u64, ExecuteRequest)>(100);
     let state = AppState {
@@ -114,8 +111,11 @@ pub async fn run() -> Result<()> {
 
     let port = 8910;
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-    println!("Executor listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("🟢 Executor is running...");
+    if let Some(tx) = ready_tx {
+        let _ = tx.send(());
+    }
     axum::serve(listener, app).await?;
     Ok(())
 }
