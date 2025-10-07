@@ -11,19 +11,6 @@ use std::{collections::HashSet, net::SocketAddr, process::Command, sync::Arc};
 use sysinfo::System;
 use tower_http::cors;
 
-/// Find an available port starting from the given port
-async fn find_available_port(start_port: u16) -> Result<u16> {
-    for port in start_port..start_port + 100 {
-        if tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port)))
-            .await
-            .is_ok()
-        {
-            return Ok(port);
-        }
-    }
-    anyhow::bail!("No available ports found in range {}-{}", start_port, start_port + 99);
-}
-
 #[cfg(windows)]
 use std::sync::Mutex;
 #[cfg(windows)]
@@ -609,12 +596,7 @@ pub async fn run() -> Result<()> {
 
     let app = build_app(forbidden_list.clone());
     
-    // Try to find an available port starting from 8765
-    let port = find_available_port(8765).await.unwrap_or_else(|_| {
-        eprintln!("Warning: Could not find available port starting from 8765, using 8765 anyway");
-        8765
-    });
-    
+    let port = 8765;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     println!("Process monitor listening on http://{}", addr);
     println!("Try: curl http://localhost:{}/status", port);

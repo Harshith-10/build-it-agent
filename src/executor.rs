@@ -11,7 +11,6 @@ use axum::{
 use serde::Serialize;
 use tower_http::cors;
 use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
@@ -22,19 +21,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time;
-
-/// Find an available port starting from the given port
-async fn find_available_port(start_port: u16) -> Result<u16> {
-    for port in start_port..start_port + 100 {
-        if tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port)))
-            .await
-            .is_ok()
-        {
-            return Ok(port);
-        }
-    }
-    anyhow::bail!("No available ports found in range {}-{}", start_port, start_port + 99);
-}
 
 #[derive(Clone)]
 struct AppState {
@@ -126,12 +112,7 @@ pub async fn run() -> Result<()> {
                 .allow_headers(cors::Any),
         );
 
-    // Try to find an available port starting from 8910
-    let port = find_available_port(8910).await.unwrap_or_else(|_| {
-        eprintln!("Warning: Could not find available port starting from 8910, using 8910 anyway");
-        8910
-    });
-
+    let port = 8910;
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     println!("Executor listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
