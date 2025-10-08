@@ -80,7 +80,25 @@ jobs:
       - name: Build binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare archive
+      - name: Prepare archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          $BIN_NAME = "build-it-agent${{ matrix.bin_ext }}"
+          $BIN_PATH = "target/${{ matrix.target }}/release/$BIN_NAME"
+
+          if (-not (Test-Path $BIN_PATH)) {
+            Write-Error "Error: Binary not found at $BIN_PATH"
+            exit 1
+          }
+
+          Copy-Item $BIN_PATH -Destination "dist/"
+          $ARCHIVE_NAME = "build-it-agent-${{ matrix.target }}.zip"
+          Compress-Archive -Path "dist/$BIN_NAME" -DestinationPath "dist/$ARCHIVE_NAME" -Force
+
+      - name: Prepare archive (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p dist
@@ -95,11 +113,11 @@ jobs:
           cp "$BIN_PATH" "dist/"
           cd dist
 
-          ARCHIVE_NAME="${BIN_NAME%.*}-${{ matrix.target }}.${{ matrix.archive }}"
-
           if [ "${{ matrix.archive }}" = "zip" ]; then
+            ARCHIVE_NAME="build-it-agent-${{ matrix.target }}.zip"
             zip -r "$ARCHIVE_NAME" "$BIN_NAME"
           else
+            ARCHIVE_NAME="build-it-agent-${{ matrix.target }}.tar.gz"
             tar -czf "$ARCHIVE_NAME" "$BIN_NAME"
           fi
 
