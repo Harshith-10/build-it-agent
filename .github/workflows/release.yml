@@ -57,6 +57,26 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install cross-compilation tools (Windows ARM64)
+        if: matrix.target == 'aarch64-pc-windows-msvc' && runner.os == 'Windows'
+        run: |
+          # Windows ARM64 cross-compilation is natively supported by MSVC
+          # No additional tools needed, but ensure the correct build tools are available
+          echo "Windows ARM64 cross-compilation enabled via MSVC"
+
+      - name: Install cross-compilation tools (macOS)
+        if: (matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-apple-darwin') && runner.os == 'macOS'
+        run: |
+          # macOS supports universal binaries and cross-compilation natively
+          # No additional tools needed on modern macOS with Xcode
+          echo "macOS cross-compilation enabled"
+
       - name: Build binary
         run: cargo build --release --target ${{ matrix.target }}
 
