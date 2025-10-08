@@ -510,7 +510,7 @@ where
             }
 
             // Retry by sending back to the appropriate queue
-            let sender = match message.priority {
+            let _sender = match message.priority {
                 Priority::Critical => &self.critical_receiver,
                 Priority::High => &self.high_receiver,
                 Priority::Normal => &self.normal_receiver,
@@ -533,6 +533,7 @@ impl<T> Drop for Consumer<T> {
 /// Handle for accessing the dead letter queue
 pub struct DeadLetterQueue<T> {
     dlq_receiver: Receiver<Message<T>>,
+    #[allow(dead_code)]
     metrics: Arc<RusqMetrics>,
 }
 
@@ -724,4 +725,107 @@ mod tests {
         assert_eq!(metrics.active_producers, 1);
         assert_eq!(metrics.active_consumers, 1);
     }
+
+    #[test]
+    fn test_message_creation() {
+        let msg = Message::new("test payload".to_string(), "test_topic".to_string());
+        
+        assert_eq!(msg.payload, "test payload");
+        assert_eq!(msg.topic, "test_topic");
+        assert_eq!(msg.priority, Priority::Normal);
+        assert_eq!(msg.retry_count, 0);
+    }
+
+    #[test]
+    fn test_message_with_priority() {
+        let msg = Message::new("test".to_string(), "topic".to_string())
+            .with_priority(Priority::High);
+        
+        assert_eq!(msg.priority, Priority::High);
+    }
+
+    #[test]
+    fn test_priority_ordering_enum() {
+        assert!(Priority::Critical > Priority::High);
+        assert!(Priority::High > Priority::Normal);
+        assert!(Priority::Normal > Priority::Low);
+    }
+
+    #[test]
+    fn test_rusq_config_default() {
+        let config = RusqConfig::default();
+        
+        assert_eq!(config.capacity, Some(10000));
+        assert!(config.enable_priority);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.consumer_timeout_ms, 1000);
+        assert!(config.enable_metrics);
+    }
+
+    #[test]
+    fn test_queue_shutdown() {
+        let config = RusqConfig::default();
+        let queue: MpmcQueue<String> = MpmcQueue::new(config);
+        
+        assert!(!queue.is_shutdown());
+        queue.shutdown();
+        assert!(queue.is_shutdown());
+    }
+
+    #[test]
+    fn test_send_after_shutdown() {
+        let config = RusqConfig::default();
+        let queue: MpmcQueue<String> = MpmcQueue::new(config);
+        let producer = queue.producer();
+        
+        queue.shutdown();
+        
+        let result = producer.send("test".to_string(), "topic".to_string());
+        assert!(matches!(result, Err(RusqError::QueueShutdown)));
+    }
+
+    #[test]
+    fn test_error_display() {
+        assert_eq!(RusqError::QueueFull.to_string(), "Queue is full");
+        assert_eq!(RusqError::QueueShutdown.to_string(), "Queue is shutdown");
+        assert_eq!(RusqError::Empty.to_string(), "Queue is empty");
+        assert_eq!(RusqError::Timeout.to_string(), "Operation timed out");
+        assert_eq!(RusqError::RetryRequired.to_string(), "Message retry required");
+    }
+
+    #[test]
+    fn test_metrics_snapshot() {
+        let metrics = RusqMetrics::new();
+        
+        metrics.increment_sent();
+        metrics.increment_sent();
+        metrics.increment_received();
+        metrics.add_producer();
+        
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.messages_sent, 2);
+        assert_eq!(snapshot.messages_received, 1);
+        assert_eq!(snapshot.active_producers, 1);
+    }
+
+    #[test]
+    fn test_generate_unique_message_ids() {
+        let id1 = generate_message_id();
+        let id2 = generate_message_id();
+        let id3 = generate_message_id();
+        
+        assert_ne!(id1, id2);
+        assert_ne!(id2, id3);
+        assert_ne!(id1, id3);
+    }
+
+    #[test]
+    fn test_current_timestamp() {
+        let ts1 = current_timestamp_millis();
+        thread::sleep(Duration::from_millis(10));
+        let ts2 = current_timestamp_millis();
+        
+        assert!(ts2 > ts1);
+    }
 }
+

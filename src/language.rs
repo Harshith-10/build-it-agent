@@ -436,3 +436,174 @@ pub async fn get_installed_languages(
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_language_configs_not_empty() {
+        let configs = generate_language_configs();
+        assert!(!configs.is_empty(), "Language configs should not be empty");
+    }
+
+    #[test]
+    fn test_common_languages_present() {
+        let configs = generate_language_configs();
+        
+        // Test that common languages are configured
+        assert!(configs.contains_key("python3"), "Python3 should be configured");
+        assert!(configs.contains_key("java"), "Java should be configured");
+        assert!(configs.contains_key("gcc"), "GCC should be configured");
+        assert!(configs.contains_key("gpp"), "G++ should be configured");
+    }
+
+    #[test]
+    fn test_python3_config() {
+        let configs = generate_language_configs();
+        let python_config = configs.get("python3").expect("Python3 config should exist");
+
+        assert_eq!(python_config.display_name, "Python 3");
+        assert_eq!(python_config.file_name, "main.py");
+        assert_eq!(python_config.file_extension, "py");
+        assert!(python_config.compile_command.is_none());
+    }
+
+    #[test]
+    fn test_java_config() {
+        let configs = generate_language_configs();
+        let java_config = configs.get("java").expect("Java config should exist");
+
+        assert_eq!(java_config.display_name, "Java");
+        assert_eq!(java_config.file_name, "Main.java");
+        assert_eq!(java_config.file_extension, "java");
+        assert_eq!(java_config.compile_command, Some("javac".to_string()));
+    }
+
+    #[test]
+    fn test_c_config() {
+        let configs = generate_language_configs();
+        let c_config = configs.get("gcc").expect("GCC config should exist");
+
+        assert_eq!(c_config.display_name, "GNU C");
+        assert_eq!(c_config.file_name, "main.c");
+        assert_eq!(c_config.file_extension, "c");
+        assert_eq!(c_config.compile_command, Some("gcc".to_string()));
+    }
+
+    #[test]
+    fn test_cpp_config() {
+        let configs = generate_language_configs();
+        let cpp_config = configs.get("gpp").expect("G++ config should exist");
+
+        assert_eq!(cpp_config.display_name, "GNU C++");
+        assert_eq!(cpp_config.file_name, "main.cpp");
+        assert_eq!(cpp_config.file_extension, "cpp");
+        assert_eq!(cpp_config.compile_command, Some("g++".to_string()));
+    }
+
+    #[test]
+    fn test_language_config_file_extensions() {
+        let configs = generate_language_configs();
+        
+        // Verify file extensions are correctly extracted
+        for (_name, config) in configs.iter() {
+            if !config.file_name.is_empty() {
+                // If there's a file extension, it should match
+                let expected_ext = std::path::Path::new(&config.file_name)
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+                assert_eq!(config.file_extension, expected_ext);
+            }
+        }
+    }
+
+    #[test]
+    fn test_compiled_languages_have_compile_command() {
+        let configs = generate_language_configs();
+        
+        // Compiled languages should have compile commands
+        let compiled_langs = vec!["java", "gcc", "gpp", "clang", "clangpp"];
+        for lang in compiled_langs {
+            if let Some(config) = configs.get(lang) {
+                assert!(
+                    config.compile_command.is_some(),
+                    "{} should have a compile command",
+                    lang
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_interpreted_languages_no_compile_command() {
+        let configs = generate_language_configs();
+        
+        // Interpreted languages should not have compile commands
+        let interpreted_langs = vec!["python3", "python"];
+        for lang in interpreted_langs {
+            if let Some(config) = configs.get(lang) {
+                assert!(
+                    config.compile_command.is_none(),
+                    "{} should not have a compile command",
+                    lang
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_language_info_creation() {
+        let info = LanguageInfo {
+            name: "python3".to_string(),
+            display_name: "Python 3".to_string(),
+            version: "Python 3.9.0".to_string(),
+        };
+
+        assert_eq!(info.name, "python3");
+        assert_eq!(info.display_name, "Python 3");
+        assert_eq!(info.version, "Python 3.9.0");
+    }
+
+    #[test]
+    fn test_platform_specific_python_command() {
+        let configs = generate_language_configs();
+        let python_config = configs.get("python3").expect("Python3 config should exist");
+
+        if cfg!(windows) {
+            assert_eq!(python_config.run_command, "python");
+        } else {
+            assert_eq!(python_config.run_command, "python3");
+        }
+    }
+
+    #[test]
+    fn test_all_configs_have_display_name() {
+        let configs = generate_language_configs();
+        
+        for (name, config) in configs.iter() {
+            assert!(
+                !config.display_name.is_empty(),
+                "Language {} should have a display name",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_configs_have_version_command() {
+        let configs = generate_language_configs();
+        
+        for (name, config) in configs.iter() {
+            if name != "psql" { // psql might have different requirements
+                assert!(
+                    !config.version_command.is_empty(),
+                    "Language {} should have a version command",
+                    name
+                );
+            }
+        }
+    }
+}
+
