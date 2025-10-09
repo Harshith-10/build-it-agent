@@ -16,12 +16,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Institute of Aeronautical Engineering\0"
             VALUE "FileDescription",  "BuildIT Code Execution Agent - Secure sandboxed code runner for educational assessments\0"
-            VALUE "FileVersion",      "1.0.0.0\0"
+            VALUE "FileVersion",      "1.0.1.0\0"
             VALUE "InternalName",     "build-it-agent\0"
             VALUE "LegalCopyright",   "Copyright (C) 2025 Institute of Aeronautical Engineering\0"
             VALUE "OriginalFilename", "build-it-agent.exe\0"
             VALUE "ProductName",      "BuildITAgent\0"
-            VALUE "ProductVersion",   "1.0.0.0\0"
+            VALUE "ProductVersion",   "1.0.1.0\0"
             VALUE "Comments",         "Educational code execution and monitoring service for secure online assessments. This application provides sandboxed code execution and process monitoring for examination integrity.\0"
         END
     END
