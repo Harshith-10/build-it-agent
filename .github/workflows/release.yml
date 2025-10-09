@@ -102,81 +102,14 @@ jobs:
       - name: Sign Windows executable
         if: runner.os == 'Windows'
         shell: powershell
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         run: |
           $binPath = "target\${{ matrix.target }}\release\build-it-agent${{ matrix.bin_ext }}"
           
-          # Check if production certificate is available
-          if ($env:CERTIFICATE_BASE64) {
-            Write-Host "Using production certificate..." -ForegroundColor Cyan
-            
-            # Decode certificate from base64 secret
-            $certBytes = [System.Convert]::FromBase64String($env:CERTIFICATE_BASE64)
-            $certPath = "temp-cert.pfx"
-            [IO.File]::WriteAllBytes($certPath, $certBytes)
-            
-            # Find SignTool
-            $signTool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\" -Recurse -Filter "signtool.exe" | 
-                        Where-Object { $_.FullName -like "*\x64\*" } | 
-                        Select-Object -First 1 -ExpandProperty FullName
-            
-            if (-not $signTool) {
-              Write-Warning "SignTool not found, falling back to self-signed certificate"
-            } else {
-              Write-Host "Using SignTool: $signTool"
-              
-              # Sign with production certificate
-              & $signTool sign `
-                /f $certPath `
-                /p $env:CERTIFICATE_PASSWORD `
-                /tr http://timestamp.digicert.com `
-                /td sha256 `
-                /fd sha256 `
-                $binPath
-              
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "[SUCCESS] Binary signed with production certificate!" -ForegroundColor Green
-                Remove-Item $certPath -ErrorAction SilentlyContinue
-                exit 0
-              } else {
-                Write-Warning "Production signing failed, falling back to self-signed certificate"
-              }
-            }
-            
-            # Clean up certificate
-            Remove-Item $certPath -ErrorAction SilentlyContinue
-          }
+          # Use the sign-executable.ps1 script for consistent signing
+          Write-Host "Signing executable using sign-executable.ps1..." -ForegroundColor Cyan
           
-          # Use self-signed certificate (fallback or default)
-          Write-Host "Creating self-signed certificate..." -ForegroundColor Yellow
-          
-          $cert = New-SelfSignedCertificate `
-            -Subject "CN=BuildIT Agent, O=GitHub Actions, C=US" `
-            -Type CodeSigningCert `
-            -CertStoreLocation Cert:\CurrentUser\My `
-            -NotAfter (Get-Date).AddYears(3)
-          
-          Write-Host "Certificate created with thumbprint: $($cert.Thumbprint)" -ForegroundColor Cyan
-          
-          # Sign with self-signed certificate
-          $signResult = Set-AuthenticodeSignature `
-            -FilePath $binPath `
-            -Certificate $cert `
-            -TimestampServer "http://timestamp.digicert.com" `
-            -HashAlgorithm SHA256
-          
-          if ($signResult.Status -eq "Valid" -or $signResult.Status -eq "UnknownError") {
-            Write-Host "[SUCCESS] Binary signed with self-signed certificate!" -ForegroundColor Green
-            Write-Host "Status: $($signResult.Status)" -ForegroundColor Cyan
-          } else {
-            Write-Warning "Self-signing failed: $($signResult.StatusMessage)"
-            Write-Warning "Binary will remain unsigned"
-          }
-          
-          # Clean up certificate from store
-          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -ErrorAction SilentlyContinue
+          # Run the signing script (it doesn't require admin in CI)
+          .\scripts\sign-executable.ps1 -ExePath $binPath
 
       - name: Prepare archive (Windows)
         if: runner.os == 'Windows'

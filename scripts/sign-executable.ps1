@@ -8,12 +8,17 @@ param(
 Write-Host "BuildIT Agent Code Signing Utility" -ForegroundColor Cyan
 Write-Host "===================================`n" -ForegroundColor Cyan
 
-# Check if running as Administrator
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "ERROR: This script must be run as Administrator" -ForegroundColor Red
-    Write-Host "Right-click PowerShell and select 'Run as Administrator'" -ForegroundColor Yellow
-    exit 1
+# Check if running as Administrator (skip in CI environments)
+$isCI = $env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true"
+if (-not $isCI) {
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Write-Host "ERROR: This script must be run as Administrator" -ForegroundColor Red
+        Write-Host "Right-click PowerShell and select 'Run as Administrator'" -ForegroundColor Yellow
+        exit 1
+    }
+} else {
+    Write-Host "Running in CI environment - skipping admin check" -ForegroundColor Yellow
 }
 
 # Check if executable exists
