@@ -28,13 +28,13 @@ jobs:
           # Windows x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive: zip
+            archive: none
             bin_ext: ".exe"
 
           # Windows ARM64
           - os: windows-latest
             target: aarch64-pc-windows-msvc
-            archive: zip
+            archive: none
             bin_ext: ".exe"
 
           # macOS Intel
@@ -124,9 +124,9 @@ jobs:
             exit 1
           }
 
-          Copy-Item $BIN_PATH -Destination "dist/"
-          $ARCHIVE_NAME = "build-it-agent-${{ matrix.target }}.zip"
-          Compress-Archive -Path "dist/$BIN_NAME" -DestinationPath "dist/$ARCHIVE_NAME" -Force
+          # Copy the .exe file directly without zipping
+          $OUTPUT_NAME = "build-it-agent-${{ matrix.target }}${{ matrix.bin_ext }}"
+          Copy-Item $BIN_PATH -Destination "dist/$OUTPUT_NAME"
 
       - name: Prepare archive (Unix)
         if: runner.os != 'Windows'
@@ -185,6 +185,7 @@ jobs:
           files: |
             dist/**/*.zip
             dist/**/*.tar.gz
+            dist/**/*.exe
             dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
