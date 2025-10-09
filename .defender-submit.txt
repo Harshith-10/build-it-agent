@@ -1,0 +1,88 @@
+# Information for Microsoft Defender False Positive Submission
+# Submit at: https://www.microsoft.com/en-us/wdsi/filesubmission
+
+APPLICATION INFORMATION:
+========================
+Application Name: BuildITAgent
+Version: 1.0.0
+Developer: Institute of Aeronautical Engineering
+Website: https://www.iare.ac.in
+
+FILE INFORMATION:
+=================
+Filename: build-it-agent.exe
+Purpose: Educational Assessment & Code Execution Tool
+Target Platform: Windows (x86_64)
+
+DESCRIPTION:
+============
+BuildIT Agent is a legitimate educational software application designed for secure online 
+coding assessments and examinations. The application is used by educational institutions 
+to maintain exam integrity while allowing students to write and execute code.
+
+LEGITIMATE FUNCTIONS:
+=====================
+1. CODE EXECUTION: Safely executes student-submitted code in multiple programming languages
+   (Python, Java, C++, JavaScript, etc.) within a controlled environment
+
+2. PROCESS MONITORING: Monitors running processes to detect unauthorized applications during
+   exams (e.g., IDEs, AI assistants, browsers) to prevent cheating
+
+3. LOCAL WEB SERVER: Runs a localhost-only web server (127.0.0.1:8910) to receive code
+   execution requests from the examination platform
+
+4. WINDOW DETECTION: Enumerates visible windows to identify forbidden applications that
+   might be used for unauthorized assistance during assessments
+
+WHY IT TRIGGERS DETECTION:
+===========================
+The application exhibits behaviors similar to malware due to its legitimate monitoring
+and execution capabilities:
+
+- Uses Windows API (EnumWindows, GetWindowThreadProcessId) for process detection
+- Spawns child processes via tokio::process::Command for code execution
+- Monitors system processes using sysinfo crate
+- Runs a network service (Axum web framework) on localhost
+- Requests elevated privileges for comprehensive process monitoring
+
+However, ALL these functions are necessary for the application's educational purpose
+and operate with user consent during proctored examinations.
+
+TECHNICAL DETAILS:
+==================
+- Programming Language: Rust
+- Build Tool: Cargo
+- Web Framework: Axum (for local API)
+- Process Monitoring: sysinfo crate, Windows API
+- Async Runtime: Tokio
+
+SECURITY MEASURES:
+==================
+- Only listens on localhost (127.0.0.1), never external networks
+- No data exfiltration - all code execution is local
+- Sandboxed execution with timeouts to prevent malicious code
+- Open source - code can be audited
+- Embedded version information and application manifest
+- Clearly identifies purpose through metadata
+
+FALSE POSITIVE DETAILS:
+=======================
+Detected as: Trojan:Win32/Sabsik.FL.A!ml
+Detection Date: 09-10-2025 10:02
+Status: Quarantine failed
+
+This is a FALSE POSITIVE. The application is a legitimate educational tool used by
+students during supervised online examinations. It does not contain malicious code,
+does not communicate with command & control servers, does not exfiltrate data, and
+operates transparently with user knowledge and consent.
+
+VERIFICATION:
+=============
+The executable contains embedded version information that can be verified:
+- Company Name: Institute of Aeronautical Engineering
+- Product Name: BuildITAgent
+- File Description: Educational code execution and monitoring service
+- Comments: Educational code execution and monitoring service for secure online assessments
+
+Please add this executable to the Windows Defender allowlist to prevent disruption
+of educational assessments.

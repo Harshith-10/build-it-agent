@@ -41,3 +41,12 @@ cocoa = "0.25"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[build-dependencies]
+embed-resource = "2.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = false  # Keep symbols for better Windows Defender analysis
